@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@anthropic-ai/claude-code';
+import { query, Options } from '@anthropic-ai/claude-code';
+import {
+  ClaudeCodeRequest,
+  ClaudeCodeStreamResponse,
+  StreamEndMessage,
+  StreamErrorMessage,
+  SessionIdUpdateMessage,
+  ApiErrorResponse
+} from '../../../lib/types/api';
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, images, continue: continueConversation, sessionId, permissionMode } = await request.json();
+    const body: ClaudeCodeRequest = await request.json();
+    const { prompt, images, continue: continueConversation, sessionId, permissionMode } = body;
 
     if (!prompt && (!images || images.length === 0)) {
-      return NextResponse.json({ error: 'Prompt or images are required' }, { status: 400 });
+      const errorResponse: ApiErrorResponse = { error: 'Prompt or images are required' };
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    const options: any = {
+    const options: Options = {
       permissionMode: permissionMode || 'bypassPermissions', // 使用用户选择的权限模式
     };
 
@@ -83,12 +93,21 @@ export async function POST(request: NextRequest) {
         try {
           for await (const message of claudeQuery) {
             // 发送流式数据
-            const chunk = encoder.encode(`data: ${JSON.stringify(message)}\n\n`);
+            const streamMessage: ClaudeCodeStreamResponse = message as ClaudeCodeStreamResponse;
+            const chunk = encoder.encode(`data: ${JSON.stringify(streamMessage)}\n\n`);
             controller.enqueue(chunk);
 
-            // 保存 session ID 用于后续对话
-            if (message.session_id) {
+            // 检查并立即发送 session ID 更新
+            if (message.session_id && message.session_id !== currentSessionId) {
               currentSessionId = message.session_id;
+
+              // 立即发送 sessionId 更新消息
+              const sessionUpdateMessage: SessionIdUpdateMessage = {
+                type: 'session_update',
+                sessionId: currentSessionId
+              };
+              const sessionChunk = encoder.encode(`data: ${JSON.stringify(sessionUpdateMessage)}\n\n`);
+              controller.enqueue(sessionChunk);
             }
 
             // 提取 token 使用情况和成本信息
@@ -103,7 +122,7 @@ export async function POST(request: NextRequest) {
           }
 
           // 发送最终的元数据
-          const finalData = {
+          const finalData: StreamEndMessage = {
             type: 'stream_end',
             sessionId: currentSessionId,
             usage: totalUsage,
@@ -115,7 +134,7 @@ export async function POST(request: NextRequest) {
 
         } catch (error) {
           console.error('Stream processing error:', error);
-          const errorData = {
+          const errorData: StreamErrorMessage = {
             type: 'stream_error',
             error: error instanceof Error ? error.message : 'Unknown error occurred'
           };
@@ -139,9 +158,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Claude Code API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process request with Claude Code' },
-      { status: 500 }
-    );
+    const errorResponse: ApiErrorResponse = {
+      error: 'Failed to process request with Claude Code'
+    };
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }

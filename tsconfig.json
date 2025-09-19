@@ -4,7 +4,7 @@
     "module": "ES2020",
     "moduleResolution": "Node",
     "outDir": "dist",
-    "rootDir": "src",
+    "baseUrl": ".",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -31,7 +31,9 @@
     ]
   },
   "include": [
-    "src/**/*",
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
     ".next/types/**/*.ts"
   ],
   "exclude": [
