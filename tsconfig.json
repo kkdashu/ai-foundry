@@ -11,6 +11,9 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "sourceMap": true,
+    "paths": {
+      "@/*": ["./*"]
+    },
     "types": [
       "node"
     ],

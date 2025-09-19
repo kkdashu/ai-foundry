@@ -1,191 +1,218 @@
-# Claude Code Web Interface
+# AI Foundry - 项目管理与Claude Code平台
 
-基于 Next.js + TypeScript 构建的 Claude Code Web 界面，将命令行工具转换为用户友好的网页应用。
+基于 Next.js + TypeScript + PostgreSQL 构建的智能项目管理平台，集成 Claude Code AI 辅助开发功能。
 
 ## 🎯 项目概述
 
-Claude Code Web Interface 是一个现代化的 Web 应用，它将强大的 Claude Code CLI 工具包装成直观易用的浏览器界面。用户可以通过聊天式的交互方式享受 AI 辅助编程的便利，无需使用命令行。
+AI Foundry 是一个现代化的项目管理平台，结合了传统的项目和任务管理功能与强大的 AI 辅助编程能力。用户可以通过直观的Web界面管理项目，并利用集成的 Claude Code 进行智能编程辅助。
+
+## ✨ 核心功能
+
+### 📊 项目管理
+- **项目列表**：创建、编辑、删除项目
+- **项目详情**：项目描述、Git仓库链接
+- **响应式界面**：适配各种屏幕尺寸
+
+### 📋 任务管理
+- **看板视图**：按状态分组（待处理、进行中、已完成、已取消）
+- **任务操作**：创建、编辑、删除、状态更新
+- **项目关联**：任务与项目的一对多关系
+
+### 🤖 Claude Code 集成
+- **聊天界面**：类似对话的AI交互体验
+- **图片支持**：上传和粘贴图片功能
+- **会话管理**：会话历史记录和恢复
+- **权限控制**：多种权限模式选择
 
 ## 🏗️ 技术架构
 
 ### 前端技术栈
-- **Next.js 15.5.3** - React 框架（App Router）
+- **Next.js 15.5.3** - React框架（App Router）
+- **React 19** - 最新React版本
 - **TypeScript** - 类型安全开发
-- **CSS** - 暗色主题界面设计
+- **CSS Grid/Flexbox** - 响应式布局
 
-### 后端集成
-- **@anthropic-ai/claude-code** - 官方 Claude Code SDK
-- **Next.js API Routes** - 服务端 API 处理
+### 后端技术栈
+- **PostgreSQL** - 关系型数据库
+- **Drizzle ORM** - 现代TypeScript ORM
+- **Next.js API Routes** - 服务端API处理
+- **@anthropic-ai/claude-code** - Claude Code SDK
 
-## 🚀 核心功能
+### 开发工具
+- **Docker** - 容器化部署
+- **pnpm** - 高效包管理器
+- **Drizzle Studio** - 数据库可视化工具
 
-### 1. Claude Code SDK 集成
-- 完整的 SDK 功能封装
-- 异步消息流处理
-- 错误处理和状态管理
+## 🚀 快速开始
 
-### 2. 上下文共享
-- **会话继续** (`continue: true`) - 保持对话历史
-- **会话恢复** (`resume: sessionId`) - 通过 ID 恢复特定会话
-- **实时会话跟踪** - 显示当前会话状态
+### 前提条件
+- Node.js 18+
+- pnpm
+- Docker（推荐）
 
-### 3. 权限管理
-提供四种权限模式：
-- `bypassPermissions` - **完全权限**（默认）- 可修改任何文件
-- `acceptEdits` - 自动接受编辑操作
-- `default` - 标准权限行为
-- `plan` - 仅规划模式，不执行操作
+### 1. 克隆项目
 
-### 4. 用户界面
-- **聊天式界面** - 类似对话的交互体验
-- **实时状态显示** - 加载状态、会话信息
-- **会话控制面板** - 上下文开关、权限选择、会话清除
-- **响应式设计** - 适配不同屏幕尺寸
+```bash
+git clone <your-repo-url>
+cd ai-foundry
+pnpm install
+```
+
+### 2. 数据库设置
+
+**使用Docker（推荐）：**
+```bash
+# 启动PostgreSQL容器
+docker run --name ai-foundry-postgres \
+  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_DB=ai_foundry \
+  -p 5432:5432 \
+  -d postgres:15
+```
+
+### 3. 环境配置
+
+```bash
+# 复制环境变量模板
+cp .env.local.example .env.local
+
+# 编辑 .env.local，设置数据库连接
+# DATABASE_URL="postgresql://postgres:password@localhost:5432/ai_foundry"
+```
+
+### 4. 初始化数据库
+
+```bash
+# 创建数据库表
+pnpm run db:push --force
+```
+
+### 5. 启动应用
+
+```bash
+# 启动开发服务器
+pnpm run dev
+```
+
+## 📖 文档
+
+- 📚 **[快速开始指南](./docs/quick-start.md)** - 5分钟快速上手
+- 🛠️ **[数据库设置指南](./docs/database-setup.md)** - 详细的数据库配置说明
+
+## 🌐 访问地址
+
+- 🏠 **项目管理首页**: http://localhost:3000
+- 💬 **Claude Code聊天**: http://localhost:3000/chat
+- 📊 **数据库管理**: `pnpm run db:studio`
 
 ## 📁 项目结构
 
 ```
-project-maker/
+ai-foundry/
 ├── app/
-│   ├── api/claude-code/
-│   │   └── route.ts          # Claude Code API 集成
-│   ├── layout.tsx            # 根布局组件
-│   ├── page.tsx              # 主页面组件
-│   └── globals.css           # 全局样式
-├── next.config.js            # Next.js 配置
-├── package.json              # 项目依赖
-├── tsconfig.json             # TypeScript 配置
-└── README.md                 # 项目文档
+│   ├── api/                    # API路由
+│   │   ├── claude-code/        # Claude Code集成
+│   │   ├── projects/           # 项目管理API
+│   │   └── tasks/              # 任务管理API
+│   ├── components/             # React组件
+│   ├── chat/                   # Claude Code聊天页面
+│   ├── projects/[id]/          # 项目详情页面
+│   ├── layout.tsx              # 根布局
+│   └── page.tsx                # 首页
+├── lib/
+│   ├── api/                    # API客户端
+│   ├── db/                     # 数据库配置
+│   └── types/                  # TypeScript类型定义
+├── docs/                       # 项目文档
+├── drizzle/                    # 数据库迁移文件
+├── drizzle.config.ts           # Drizzle配置
+└── README.md                   # 项目说明
 ```
 
-## 🛠️ 安装和运行
+## 🗄️ 数据库Schema
 
-### 环境要求
-- Node.js 18+
-- npm 或 yarn
+### projects 表
+- `id` (UUID) - 项目唯一标识
+- `name` (VARCHAR) - 项目名称
+- `description` (TEXT) - 项目描述
+- `repository_url` (VARCHAR) - Git仓库地址
+- `created_at`, `updated_at` - 时间戳
 
-### 安装依赖
+### tasks 表
+- `id` (UUID) - 任务唯一标识
+- `project_id` (UUID) - 关联项目ID
+- `description` (TEXT) - 任务描述
+- `status` (VARCHAR) - 任务状态
+- `created_at`, `updated_at` - 时间戳
+
+## 🔧 开发命令
+
+### 应用运行
 ```bash
-npm install
+pnpm run dev              # 启动开发服务器
+pnpm run build            # 构建生产版本
+pnpm run start            # 启动生产服务器
+pnpm run lint             # 代码检查
 ```
 
-### 开发模式
+### 数据库管理
 ```bash
-npm run dev
+pnpm run db:push          # 推送schema变更
+pnpm run db:generate      # 生成迁移文件
+pnpm run db:migrate       # 执行迁移
+pnpm run db:studio        # 打开数据库管理界面
 ```
-访问 http://localhost:3000
 
-### 生产构建
+### Docker管理
 ```bash
-npm run build
-npm run start
+docker start ai-foundry-postgres    # 启动数据库
+docker stop ai-foundry-postgres     # 停止数据库
+docker logs ai-foundry-postgres     # 查看数据库日志
 ```
 
 ## 🎛️ 使用指南
 
-### 基本使用
-1. 在输入框中输入你的问题或任务
-2. 点击"发送"按钮或按 Enter 键
-3. Claude Code 将处理你的请求并显示响应
+### 项目管理
+1. 在首页点击"新建项目"创建项目
+2. 填写项目名称、描述和Git仓库地址
+3. 点击项目卡片进入项目详情页面
 
-### 上下文管理
-- **继续对话上下文**：勾选此选项以保持对话历史
-- **会话ID**：显示当前会话的唯一标识符
-- **清除会话**：重置对话历史和会话状态
+### 任务管理
+1. 在项目详情页面点击"新建任务"
+2. 填写任务描述并选择状态
+3. 使用编辑和删除功能管理任务
 
-### 权限设置
-选择合适的权限模式：
-- **完全权限**：允许 Claude 修改任何文件（推荐用于开发）
-- **自动接受编辑**：自动确认文件修改操作
-- **默认权限**：标准安全模式
-- **仅规划**：只生成计划，不执行操作
-
-## ✨ 功能特性
-
-### 输入方式
-- 多行文本输入框
-- Enter 发送消息
-- Shift+Enter 换行
-- 实时加载状态
-
-### 输出展示
-- 用户消息（右侧蓝色气泡）
-- Claude 响应（左侧灰色气泡）
-- 时间戳显示
-- 代码语法高亮
-
-### 技术特性
-- **安全性**：权限模式动态控制
-- **性能**：异步消息流处理
-- **扩展性**：模块化 API 设计
-- **类型安全**：全栈 TypeScript 支持
-
-## 🎯 使用场景
-
-1. **代码开发**
-   - 文件编辑和代码重构
-   - 依赖管理和配置
-   - Bug 修复和优化
-
-2. **项目管理**
-   - 配置文件修改
-   - 脚本执行和部署
-   - 构建流程优化
-
-3. **学习探索**
-   - 代码解释和分析
-   - 最佳实践建议
-   - 技术方案讨论
-
-4. **快速原型**
-   - 功能快速实现
-   - 测试用例编写
-   - API 接口开发
-
-## 🔧 开发说明
-
-### API 接口
-主要 API 端点：`/api/claude-code`
-
-请求格式：
-```json
-{
-  "prompt": "用户输入的问题",
-  "continue": true,
-  "sessionId": "会话ID",
-  "permissionMode": "bypassPermissions"
-}
-```
-
-响应格式：
-```json
-{
-  "messages": [...],
-  "sessionId": "新的会话ID",
-  "success": true
-}
-```
-
-### 环境变量
-确保已配置 Claude Code CLI 认证：
-```bash
-claude login
-```
+### Claude Code助手
+1. 访问 `/chat` 页面
+2. 在输入框中输入问题或任务
+3. 选择合适的权限模式
+4. 享受AI辅助编程体验
 
 ## 🚨 注意事项
 
-- **完全权限模式**：使用 `bypassPermissions` 时请确保在安全环境中操作
-- **文件备份**：重要文件请提前备份
-- **网络要求**：需要稳定的网络连接访问 Claude API
+- **数据安全**：重要数据请定期备份
+- **权限控制**：在生产环境中谨慎使用完全权限模式
+- **网络要求**：Claude Code功能需要稳定的网络连接
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+1. Fork 项目
+2. 创建功能分支
+3. 提交代码更改
+4. 创建 Pull Request
 
 ## 📄 许可证
 
 ISC License
 
-## 🤝 贡献
+## 🎉 致谢
 
-欢迎提交 Issue 和 Pull Request 来改进这个项目。
+- **Claude Code SDK** - AI辅助编程能力
+- **Drizzle ORM** - 现代化数据库工具
+- **Next.js** - 强大的React框架
 
 ---
 
-**Powered by Claude Code SDK** | **Built with Next.js & TypeScript**
+**Powered by Claude Code & Next.js** | **Built with ❤️ and TypeScript**

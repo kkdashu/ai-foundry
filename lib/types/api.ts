@@ -1,5 +1,37 @@
 // Shared type definitions for frontend and backend API consistency
 
+// Database entities
+export interface Project {
+  id: string
+  name: string
+  description: string
+  repositoryUrl?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Task {
+  id: string
+  projectId: string
+  description: string
+  status: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Input types for creating new records
+export interface NewProject {
+  name: string
+  description: string
+  repositoryUrl?: string
+}
+
+export interface NewTask {
+  projectId: string
+  description: string
+  status?: string
+}
+
 export interface UploadedImage {
   id: string
   data: string

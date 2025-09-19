@@ -1,352 +1,339 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import SessionControlPanel from './components/SessionControlPanel'
-import MessageItem from './components/MessageItem'
-import ImagePreview from './components/ImagePreview'
-import MessageInput from './components/MessageInput'
-import { ClaudeCodeAPI } from '../lib/api/claude-code'
-import {
-  UploadedImage,
-  TokenUsage,
-  Message,
-  PermissionMode,
-  SessionState,
-  isStreamEndMessage,
-  isStreamErrorMessage,
-  isSessionIdUpdateMessage,
-  isClaudeCodeStreamMessage
-} from '../lib/types/api'
+import { Project, NewProject } from '../lib/types/api'
 
-export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    // 从localStorage读取保存的sessionId
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('claude-code-session-id')
-    }
-    return null
+export default function HomePage() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [newProject, setNewProject] = useState<NewProject>({
+    name: '',
+    description: '',
+    repositoryUrl: ''
   })
-  const [continueConversation, setContinueConversation] = useState(true)
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('bypassPermissions')
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([])
-  const [totalTokens, setTotalTokens] = useState({
-    input: 0,
-    output: 0,
-    total: 0
-  })
-  const [totalCost, setTotalCost] = useState(0)
 
-  // 保存sessionId到localStorage
   useEffect(() => {
-    if (sessionId) {
-      localStorage.setItem('claude-code-session-id', sessionId)
-    }
-  }, [sessionId])
+    fetchProjects()
+  }, [])
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files) return
-
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) {
-        alert('请选择图片文件')
-        return
+  const fetchProjects = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch('/api/projects')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data)
+      } else {
+        console.error('Failed to fetch projects')
       }
-
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        alert('图片大小不能超过10MB')
-        return
-      }
-
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        const base64Data = result.split(',')[1] // Remove data:image/...;base64, prefix
-
-        const newImage: UploadedImage = {
-          id: Math.random().toString(36).substr(2, 9),
-          data: base64Data,
-          mimeType: file.type,
-          name: file.name,
-          size: file.size,
-          preview: result
-        }
-
-        setUploadedImages(prev => [...prev, newImage])
-      }
-      reader.readAsDataURL(file)
-    })
-
-    // Reset file input
-    event.target.value = ''
-  }
-
-  const removeImage = (imageId: string) => {
-    setUploadedImages(prev => prev.filter(img => img.id !== imageId))
-  }
-
-  const handlePaste = async (event: React.ClipboardEvent) => {
-    const items = event.clipboardData?.items
-    if (!items) return
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-
-      if (item.type.startsWith('image/')) {
-        event.preventDefault() // 阻止默认粘贴行为
-
-        const file = item.getAsFile()
-        if (!file) continue
-
-        if (file.size > 10 * 1024 * 1024) { // 10MB limit
-          alert('图片大小不能超过10MB')
-          continue
-        }
-
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const result = e.target?.result as string
-          const base64Data = result.split(',')[1] // Remove data:image/...;base64, prefix
-
-          const newImage: UploadedImage = {
-            id: Math.random().toString(36).substr(2, 9),
-            data: base64Data,
-            mimeType: file.type,
-            name: file.name || `pasted-image-${Date.now()}.${file.type.split('/')[1]}`,
-            size: file.size,
-            preview: result
-          }
-
-          setUploadedImages(prev => [...prev, newImage])
-
-          // 显示成功提示
-          const toast = document.createElement('div')
-          toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #22c55e;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          `
-          toast.textContent = '图片已从剪贴板添加'
-          document.body.appendChild(toast)
-
-          setTimeout(() => {
-            document.body.removeChild(toast)
-          }, 3000)
-        }
-        reader.readAsDataURL(file)
-      }
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const sendMessage = async () => {
-    if ((!input.trim() && uploadedImages.length === 0) || isLoading) return
-
-    // Validate request
-    const request = ClaudeCodeAPI.createRequest(
-      input,
-      uploadedImages,
-      continueConversation,
-      sessionId,
-      permissionMode
-    )
-
-    const validationError = ClaudeCodeAPI.validateRequest(request)
-    if (validationError) {
-      alert(validationError)
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newProject.name.trim() || !newProject.description.trim()) {
+      alert('项目名称和描述不能为空')
       return
     }
 
-    const userMessage: Message = {
-      type: 'user',
-      content: input,
-      images: uploadedImages.length > 0 ? uploadedImages : undefined,
-      timestamp: new Date()
-    }
+    try {
+      setIsCreating(true)
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newProject),
+      })
 
-    setMessages(prev => [...prev, userMessage])
-    setInput('')
-    setUploadedImages([])
-    setIsLoading(true)
-
-    const assistantMessageIndex = messages.length + 1;
-    const assistantMessage: Message = {
-      type: 'assistant',
-      content: '',
-      timestamp: new Date()
-    }
-    setMessages(prev => [...prev, assistantMessage])
-
-    let assistantContent = ''
-
-    await ClaudeCodeAPI.sendMessage(
-      request,
-      (message) => {
-        if (isSessionIdUpdateMessage(message)) {
-          // Handle immediate session ID update
-          console.log('Received sessionId update:', message.sessionId)
-          setSessionId(message.sessionId)
-        } else if (isStreamEndMessage(message)) {
-          // Handle stream end
-          if (message.sessionId) {
-            setSessionId(message.sessionId)
-          }
-
-          if (message.usage) {
-            setTotalTokens(prev => ({
-              input: prev.input + (message.usage!.input_tokens || 0),
-              output: prev.output + (message.usage!.output_tokens || 0),
-              total: prev.total + (message.usage!.input_tokens || 0) + (message.usage!.output_tokens || 0)
-            }))
-
-            setMessages(prev => prev.map((msg, idx) =>
-              idx === assistantMessageIndex ? {
-                ...msg,
-                usage: message.usage!,
-                cost: message.totalCost
-              } : msg
-            ))
-          }
-
-          if (message.totalCost) {
-            setTotalCost(prev => prev + message.totalCost)
-          }
-        } else if (isClaudeCodeStreamMessage(message)) {
-          // Handle Claude Code messages
-          if (message.type === 'assistant' && message.message?.content) {
-            if (Array.isArray(message.message.content)) {
-              message.message.content.forEach((content: any) => {
-                if (content.type === 'text') {
-                  assistantContent += content.text + '\n'
-                }
-              })
-            }
-          } else if (message.type === 'result' && message.result) {
-            assistantContent += `Result: ${message.result}\n`
-          }
-
-          // Update assistant message content
-          setMessages(prev => prev.map((msg, idx) =>
-            idx === assistantMessageIndex ? {
-              ...msg,
-              content: assistantContent || '正在思考...'
-            } : msg
-          ))
-        }
-      },
-      (error) => {
-        console.error('API Error:', error)
-        setMessages(prev => prev.map((msg, idx) =>
-          idx === assistantMessageIndex ? {
-            ...msg,
-            content: `Error: ${error}`
-          } : msg
-        ))
-        setIsLoading(false)
+      if (response.ok) {
+        const createdProject = await response.json()
+        setProjects(prev => [...prev, createdProject])
+        setNewProject({ name: '', description: '', repositoryUrl: '' })
+        setShowCreateForm(false)
+      } else {
+        alert('创建项目失败')
       }
-    )
-
-    // Handle empty content case
-    if (!assistantContent.trim()) {
-      setMessages(prev => prev.map((msg, idx) =>
-        idx === assistantMessageIndex ? {
-          ...msg,
-          content: 'No response received from Claude Code'
-        } : msg
-      ))
-    }
-
-    setIsLoading(false)
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
+    } catch (error) {
+      console.error('Error creating project:', error)
+      alert('创建项目时出错')
+    } finally {
+      setIsCreating(false)
     }
   }
 
-  const clearSession = () => {
-    setMessages([])
-    setSessionId(null)
-    setContinueConversation(true)
-    setUploadedImages([])
-    setTotalTokens({
-      input: 0,
-      output: 0,
-      total: 0
+  const formatDate = (date: string | Date) => {
+    return new Date(date).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     })
-    setTotalCost(0)
-    // 清除localStorage中的sessionId
-    localStorage.removeItem('claude-code-session-id')
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container">
+        <div style={{ textAlign: 'center', padding: '4rem' }}>
+          <div style={{ fontSize: '1.2rem', color: '#666' }}>加载项目中...</div>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="container">
-      <h1 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '2rem' }}>
-        Claude Code Web Interface
-      </h1>
-
-      <SessionControlPanel
-        continueConversation={continueConversation}
-        setContinueConversation={setContinueConversation}
-        permissionMode={permissionMode}
-        setPermissionMode={setPermissionMode}
-        sessionId={sessionId}
-        totalTokens={totalTokens}
-        totalCost={totalCost}
-        onClearSession={clearSession}
-      />
-
-      <div className="chat-interface">
-        <div className="messages-container">
-          {messages.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
-              Welcome! Enter a prompt to start interacting with Claude Code.
-            </div>
-          ) : (
-            messages.map((message, index) => (
-              <MessageItem
-                key={index}
-                message={message}
-                index={index}
-                isLoading={isLoading}
-                isLastMessage={index === messages.length - 1}
-              />
-            ))
-          )}
-          {isLoading && messages[messages.length - 1]?.content === '' && (
-            <div className="message assistant">
-              <div className="loading">Claude Code is thinking...</div>
-            </div>
-          )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2.5rem', margin: 0, color: '#333' }}>
+          项目管理
+        </h1>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <a
+            href="/chat"
+            style={{
+              textDecoration: 'none',
+              color: '#0066cc',
+              fontSize: '1rem',
+              padding: '8px 16px',
+              border: '1px solid #0066cc',
+              borderRadius: '4px',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f0f8ff'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            Chat
+          </a>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            style={{
+              backgroundColor: '#22c55e',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '6px',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#22c55e'}
+          >
+            + 新建项目
+          </button>
         </div>
-
-        <ImagePreview
-          uploadedImages={uploadedImages}
-          onRemoveImage={removeImage}
-        />
       </div>
 
-      <MessageInput
-        input={input}
-        setInput={setInput}
-        isLoading={isLoading}
-        uploadedImages={uploadedImages}
-        onSendMessage={sendMessage}
-        onKeyPress={handleKeyPress}
-        onPaste={handlePaste}
-        onImageUpload={handleImageUpload}
-      />
+      {showCreateForm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '8px',
+            minWidth: '400px',
+            maxWidth: '500px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
+          }}>
+            <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>创建新项目</h2>
+            <form onSubmit={handleCreateProject}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  项目名称 *
+                </label>
+                <input
+                  type="text"
+                  value={newProject.name}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="输入项目名称"
+                  required
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  项目描述 *
+                </label>
+                <textarea
+                  value={newProject.description}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    minHeight: '80px',
+                    resize: 'vertical',
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="输入项目描述"
+                  required
+                />
+              </div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Git 仓库地址 (可选)
+                </label>
+                <input
+                  type="url"
+                  value={newProject.repositoryUrl}
+                  onChange={(e) => setNewProject(prev => ({ ...prev, repositoryUrl: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="https://github.com/username/repo"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  style={{
+                    backgroundColor: '#f3f4f6',
+                    color: '#374151',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                  disabled={isCreating}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: '#22c55e',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                  disabled={isCreating}
+                >
+                  {isCreating ? '创建中...' : '创建'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))' }}>
+        {projects.length === 0 ? (
+          <div style={{
+            gridColumn: '1 / -1',
+            textAlign: 'center',
+            padding: '4rem',
+            color: '#666',
+            backgroundColor: '#f9fafb',
+            borderRadius: '8px',
+            border: '2px dashed #d1d5db'
+          }}>
+            <h3 style={{ marginBottom: '1rem', color: '#374151' }}>还没有项目</h3>
+            <p style={{ marginBottom: '1.5rem' }}>创建您的第一个项目来开始管理任务</p>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              style={{
+                backgroundColor: '#22c55e',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                fontSize: '1rem',
+                cursor: 'pointer'
+              }}
+            >
+              + 创建项目
+            </button>
+          </div>
+        ) : (
+          projects.map((project) => (
+            <div
+              key={project.id}
+              style={{
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                backgroundColor: 'white',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                cursor: 'pointer'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
+              }}
+              onClick={() => window.location.href = `/projects/${project.id}`}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#1f2937', fontSize: '1.25rem' }}>
+                {project.name}
+              </h3>
+              <p style={{ marginBottom: '1rem', color: '#6b7280', lineHeight: '1.5' }}>
+                {project.description}
+              </p>
+              {project.repositoryUrl && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <a
+                    href={project.repositoryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#0066cc',
+                      textDecoration: 'none',
+                      fontSize: '0.9rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    🔗 Git 仓库
+                  </a>
+                </div>
+              )}
+              <div style={{ fontSize: '0.85rem', color: '#9ca3af' }}>
+                创建于 {formatDate(project.createdAt)}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }
