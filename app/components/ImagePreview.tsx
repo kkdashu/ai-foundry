@@ -1,3 +1,7 @@
+import { X, Images } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
 import { UploadedImage } from '../../lib/types/api'
 
 interface ImagePreviewProps {
@@ -9,66 +13,42 @@ export default function ImagePreview({ uploadedImages, onRemoveImage }: ImagePre
   if (uploadedImages.length === 0) return null
 
   return (
-    <div style={{
-      padding: '1rem',
-      border: '1px solid #333',
-      borderRadius: '8px',
-      marginBottom: '1rem',
-      background: '#1a1a1a'
-    }}>
-      <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#888' }}>
-        已上传的图片 ({uploadedImages.length})
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-        {uploadedImages.map((image) => (
-          <div key={image.id} style={{ position: 'relative' }}>
-            <img
-              src={image.preview}
-              alt={image.name}
-              style={{
-                width: '80px',
-                height: '80px',
-                objectFit: 'cover',
-                borderRadius: '4px',
-                border: '1px solid #444'
-              }}
-            />
-            <button
-              onClick={() => onRemoveImage(image.id)}
-              style={{
-                position: 'absolute',
-                top: '-8px',
-                right: '-8px',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: '#dc2626',
-                color: 'white',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              ×
-            </button>
-            <div style={{
-              fontSize: '0.7rem',
-              color: '#666',
-              marginTop: '2px',
-              textAlign: 'center',
-              maxWidth: '80px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {image.name}
+    <Card className="mb-4">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Images className="h-4 w-4" />
+          已上传的图片
+          <Badge variant="secondary" className="ml-1">
+            {uploadedImages.length}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="flex flex-wrap gap-3">
+          {uploadedImages.map((image) => (
+            <div key={image.id} className="relative group">
+              <div className="relative">
+                <img
+                  src={image.preview}
+                  alt={image.name}
+                  className="w-20 h-20 object-cover rounded-md border border-border"
+                />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onRemoveImage(image.id)}
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground text-center max-w-20 truncate">
+                {image.name}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-    </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

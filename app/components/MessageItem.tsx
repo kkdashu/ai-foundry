@@ -1,3 +1,7 @@
+import { User, Bot, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardHeader } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { cn } from '../../lib/utils'
 import { Message } from '../../lib/types/api'
 
 interface MessageItemProps {
@@ -8,104 +12,95 @@ interface MessageItemProps {
 }
 
 export default function MessageItem({ message, index, isLoading, isLastMessage }: MessageItemProps) {
+  const isUser = message.type === 'user'
+
   return (
-    <div key={index} className={`message ${message.type}`}>
-      <strong>
-        {message.type === 'user' ? 'You' : 'Claude Code'}:
-        {isLoading && message.type === 'assistant' && isLastMessage && (
-          <span className="streaming-indicator">实时响应中</span>
-        )}
-      </strong>
-
-      {message.images && message.images.length > 0 && (
-        <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {message.images.map((image) => (
-              <img
-                key={image.id}
-                src={image.preview}
-                alt={image.name}
-                style={{
-                  maxWidth: '200px',
-                  maxHeight: '200px',
-                  objectFit: 'contain',
-                  borderRadius: '4px',
-                  border: '1px solid #444'
-                }}
-                title={image.name}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {message.content && (
-        <div style={{ marginTop: '0.5rem' }}>
-          <pre>{message.content}</pre>
-        </div>
-      )}
-
-      {isLoading && message.type === 'assistant' && !message.content && isLastMessage && (
-        <div style={{ marginTop: '0.5rem', color: '#888', fontStyle: 'italic' }}>
-          等待 Claude Code 响应...
-        </div>
-      )}
-
-      <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-        <span>{message.timestamp.toLocaleTimeString()}</span>
-
-        {message.usage && (
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.75rem' }}>
-            <span style={{
-              background: 'rgba(37, 99, 235, 0.2)',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              color: '#60A5FA'
-            }}>
-              输入: {message.usage.input_tokens?.toLocaleString()} tokens
-            </span>
-            <span style={{
-              background: 'rgba(34, 197, 94, 0.2)',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              color: '#4ADE80'
-            }}>
-              输出: {message.usage.output_tokens?.toLocaleString()} tokens
-            </span>
-            {message.usage.cache_read_input_tokens && (
-              <span style={{
-                background: 'rgba(168, 85, 247, 0.2)',
-                padding: '2px 6px',
-                borderRadius: '3px',
-                color: '#A78BFA'
-              }}>
-                缓存: {message.usage.cache_read_input_tokens?.toLocaleString()} tokens
-              </span>
+    <div className={cn(
+      "mb-4",
+      isUser ? "ml-8" : "mr-8"
+    )}>
+      <Card className={cn(
+        "overflow-hidden",
+        isUser ? "bg-primary text-primary-foreground" : "bg-card"
+      )}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            {isUser ? (
+              <User className="h-4 w-4" />
+            ) : (
+              <Bot className="h-4 w-4" />
             )}
-            <span style={{
-              background: 'rgba(156, 163, 175, 0.2)',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              color: '#9CA3AF',
-              fontWeight: 'bold'
-            }}>
-              总计: {((message.usage.input_tokens || 0) + (message.usage.output_tokens || 0)).toLocaleString()} tokens
+            <span className="font-semibold">
+              {isUser ? 'You' : 'Claude Code'}
             </span>
+            {isLoading && !isUser && isLastMessage && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="text-xs">实时响应中</span>
+              </div>
+            )}
           </div>
-        )}
+        </CardHeader>
 
-        {message.cost && (
-          <span style={{
-            background: 'rgba(245, 158, 11, 0.2)',
-            padding: '2px 6px',
-            borderRadius: '3px',
-            color: '#FBBF24',
-            fontSize: '0.75rem'
-          }}>
-            成本: ${message.cost.toFixed(4)}
-          </span>
-        )}
-      </div>
+        <CardContent className="pt-0">
+          {message.images && message.images.length > 0 && (
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-2">
+                {message.images.map((image) => (
+                  <img
+                    key={image.id}
+                    src={image.preview}
+                    alt={image.name}
+                    className="max-w-[200px] max-h-[200px] object-contain rounded border"
+                    title={image.name}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {message.content && (
+            <div className="mb-3">
+              <pre className="whitespace-pre-wrap text-sm">{message.content}</pre>
+            </div>
+          )}
+
+          {isLoading && !isUser && !message.content && isLastMessage && (
+            <div className="text-muted-foreground italic">
+              等待 Claude Code 响应...
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 items-center text-xs text-muted-foreground mt-3">
+            <span>{message.timestamp.toLocaleTimeString()}</span>
+
+            {message.usage && (
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="secondary" className="text-xs bg-blue-500/20 text-blue-400">
+                  输入: {message.usage.input_tokens?.toLocaleString()}
+                </Badge>
+                <Badge variant="secondary" className="text-xs bg-green-500/20 text-green-400">
+                  输出: {message.usage.output_tokens?.toLocaleString()}
+                </Badge>
+                {message.usage.cache_read_input_tokens && (
+                  <Badge variant="secondary" className="text-xs bg-purple-500/20 text-purple-400">
+                    缓存: {message.usage.cache_read_input_tokens?.toLocaleString()}
+                  </Badge>
+                )}
+                <Badge variant="secondary" className="text-xs bg-gray-500/20 text-gray-400">
+                  总计: {((message.usage.input_tokens || 0) + (message.usage.output_tokens || 0)).toLocaleString()}
+                </Badge>
+              </div>
+            )}
+
+            {message.cost && (
+              <Badge variant="secondary" className="text-xs bg-yellow-500/20 text-yellow-400">
+                成本: ${message.cost.toFixed(4)}
+              </Badge>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

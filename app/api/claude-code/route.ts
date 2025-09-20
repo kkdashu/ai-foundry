@@ -11,6 +11,12 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
+    // if (!process.env.ANTHROPIC_API_KEY) {
+    //   return NextResponse.json(
+    //     { error: 'Missing ANTHROPIC_API_KEY' },
+    //     { status: 500 }
+    //   )
+    // }
     const body: ClaudeCodeRequest = await request.json();
     const { prompt, images, continue: continueConversation, sessionId, permissionMode } = body;
 
@@ -157,10 +163,23 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Claude Code API error:', error);
-    const errorResponse: ApiErrorResponse = {
-      error: 'Failed to process request with Claude Code'
+    // Return a structured error with details for easier debugging
+    const err = error as any;
+    const payload: ApiErrorResponse & {
+      name?: string;
+      code?: string | number;
+      status?: number;
+      cause?: string;
+      stack?: string;
+    } = {
+      error: err?.message || 'Failed to process request with Claude Code',
+      name: err?.name,
+      code: err?.code,
+      status: err?.status,
+      cause: err?.cause ? String(err.cause) : undefined,
+      stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
     };
-    return NextResponse.json(errorResponse, { status: 500 });
+    console.error('Claude Code API error:', payload);
+    return NextResponse.json(payload, { status: 500 });
   }
 }

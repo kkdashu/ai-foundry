@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import ToasterClient from '@/components/toaster-client'
 
 export const metadata: Metadata = {
   title: 'Claude Code Web Interface',
@@ -12,8 +13,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className="light">
+      <body className="min-h-screen bg-background font-sans antialiased">
+        {children}
+        <ToasterClient />
+      </body>
     </html>
   )
 }

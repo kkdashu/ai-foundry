@@ -1,3 +1,9 @@
+import { Trash2, Image, Hash } from 'lucide-react'
+import { Card, CardContent } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { Button } from '../../components/ui/button'
+import { Checkbox } from '../../components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { PermissionMode } from '../../lib/types/api'
 
 interface SessionControlPanelProps {
@@ -26,110 +32,78 @@ export default function SessionControlPanel({
   onClearSession
 }: SessionControlPanelProps) {
   return (
-    <div style={{
-      marginBottom: '1rem',
-      padding: '1rem',
-      background: '#1a1a1a',
-      borderRadius: '8px',
-      border: '1px solid #333'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-        <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="continue-conversation"
               checked={continueConversation}
-              onChange={(e) => setContinueConversation(e.target.checked)}
+              onCheckedChange={setContinueConversation}
             />
-            继续对话上下文
-          </label>
-        </div>
-
-        <div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-            权限模式:
-            <select
-              value={permissionMode}
-              onChange={(e) => setPermissionMode(e.target.value as any)}
-              style={{
-                background: '#000',
-                color: '#fff',
-                border: '1px solid #333',
-                borderRadius: '4px',
-                padding: '0.25rem'
-              }}
+            <label
+              htmlFor="continue-conversation"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
-              <option value="bypassPermissions">完全权限 (可修改任何文件)</option>
-              <option value="acceptEdits">自动接受编辑</option>
-              <option value="default">默认权限</option>
-              <option value="plan">仅规划 (不执行)</option>
-            </select>
-          </label>
-        </div>
-
-        <div style={{ fontSize: '0.9rem', color: '#888' }}>
-          会话ID: {sessionId ? sessionId.slice(0, 8) + '...' : '无'}
-        </div>
-
-        {totalTokens.total > 0 && (
-          <div style={{ fontSize: '0.8rem', color: '#888', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{
-              background: 'rgba(37, 99, 235, 0.1)',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              color: '#60A5FA'
-            }}>
-              总输入: {totalTokens.input.toLocaleString()}
-            </span>
-            <span style={{
-              background: 'rgba(34, 197, 94, 0.1)',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              color: '#4ADE80'
-            }}>
-              总输出: {totalTokens.output.toLocaleString()}
-            </span>
-            <span style={{
-              background: 'rgba(156, 163, 175, 0.1)',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              color: '#9CA3AF',
-              fontWeight: 'bold'
-            }}>
-              总计: {totalTokens.total.toLocaleString()} tokens
-            </span>
-            {totalCost > 0 && (
-              <span style={{
-                background: 'rgba(245, 158, 11, 0.1)',
-                padding: '2px 6px',
-                borderRadius: '3px',
-                color: '#FBBF24'
-              }}>
-                总成本: ${totalCost.toFixed(4)}
-              </span>
-            )}
+              继续对话上下文
+            </label>
           </div>
-        )}
 
-        <div style={{ fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>
-          💡 可通过📎按钮或Ctrl+V粘贴图片
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">权限模式:</label>
+            <Select value={permissionMode} onValueChange={setPermissionMode}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bypassPermissions">完全权限 (可修改任何文件)</SelectItem>
+                <SelectItem value="acceptEdits">自动接受编辑</SelectItem>
+                <SelectItem value="default">默认权限</SelectItem>
+                <SelectItem value="plan">仅规划 (不执行)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Hash className="h-3 w-3" />
+            会话ID: {sessionId ? sessionId.slice(0, 8) + '...' : '无'}
+          </div>
+
+          {totalTokens.total > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="secondary" className="bg-blue-500/20 text-blue-400">
+                总输入: {totalTokens.input.toLocaleString()}
+              </Badge>
+              <Badge variant="secondary" className="bg-green-500/20 text-green-400">
+                总输出: {totalTokens.output.toLocaleString()}
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-500/20 text-gray-400">
+                总计: {totalTokens.total.toLocaleString()} tokens
+              </Badge>
+              {totalCost > 0 && (
+                <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400">
+                  总成本: ${totalCost.toFixed(4)}
+                </Badge>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 text-xs text-muted-foreground italic">
+            <Image className="h-3 w-3" />
+            可通过📎按钮或Ctrl+V粘贴图片
+          </div>
+
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onClearSession}
+            className="ml-auto"
+          >
+            <Trash2 className="h-3 w-3 mr-1" />
+            清除会话
+          </Button>
         </div>
-
-        <button
-          onClick={onClearSession}
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#dc2626',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.9rem'
-          }}
-        >
-          清除会话
-        </button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

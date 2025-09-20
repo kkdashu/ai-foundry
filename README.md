@@ -216,3 +216,12 @@ ISC License
 ---
 
 **Powered by Claude Code & Next.js** | **Built with ❤️ and TypeScript**
+## AI Chat (ai-sdk + ai-elements)
+
+Homepage includes AI text and video chat using ai-sdk with Google provider.
+
+Setup:
+- Install: `pnpm add ai @ai-sdk/google @ai-sdk/elements`
+- Env: set `GOOGLE_GENERATIVE_AI_API_KEY` in your environment.
+- API route: `app/api/ai/chat/route.ts` streams responses.
+- UI: components are mounted in `app/page.tsx`.
