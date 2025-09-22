@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Project, NewProject } from '../lib/types/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { useToast } from '@/components/ui/use-toast'
+import { Trash2 } from 'lucide-react'
 import ChatBox from '@/components/chat-box'
 
 export default function HomePage() {
@@ -22,11 +24,60 @@ export default function HomePage() {
     description: '',
     repositoryUrl: ''
   })
+  const { toast } = useToast()
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 
   useEffect(() => {
     fetchProjects()
   }, [])
+
+  // Listen for project creation/deletion events from the Agent chat and refresh list
+  useEffect(() => {
+    const onCreated = (e: any) => {
+      const id = e?.detail?.id
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+      setHighlightId(id ?? null)
+      fetchProjects().then(() => {
+        if (!id) return
+        // Scroll the new card into view after render
+        requestAnimationFrame(() => {
+          const el = document.getElementById(`project-card-${id}`)
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        })
+      })
+      // Clear highlight after 2.5s
+      highlightTimerRef.current = setTimeout(() => setHighlightId(null), 2500)
+    }
+    const onDeleted = () => fetchProjects()
+    window.addEventListener('project:created', onCreated as EventListener)
+    window.addEventListener('project:deleted', onDeleted as EventListener)
+    return () => {
+      window.removeEventListener('project:created', onCreated as EventListener)
+      window.removeEventListener('project:deleted', onDeleted as EventListener)
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    }
+  }, [])
+
+  const handleDeleteProject = async (project: Project, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const confirmed = window.confirm(`确认删除项目：“${project.name}”？`)
+    if (!confirmed) return
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || `HTTP ${res.status}`)
+      }
+      setProjects(prev => prev.filter(p => p.id !== project.id))
+      toast({ description: `已删除项目：${project.name}` })
+      try { window.dispatchEvent(new CustomEvent('project:deleted', { detail: project })) } catch {}
+    } catch (err: any) {
+      console.error('Delete failed:', err)
+      toast({ description: `删除失败：${err?.message || '未知错误'}`, variant: 'destructive' })
+    }
+  }
 
   const fetchProjects = async () => {
     try {
@@ -88,16 +139,6 @@ export default function HomePage() {
     })
   }
 
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto max-w-6xl p-4">
-        <div className="text-center p-16">
-          <div className="text-xl text-muted-foreground">加载项目中...</div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="container mx-auto max-w-6xl p-4">
@@ -186,7 +227,13 @@ export default function HomePage() {
       </div>
 
       <div className="grid gap-6 grid-cols-[repeat(auto-fill,minmax(350px,1fr))]">
-        {projects.length === 0 ? (
+        {isLoading ? (
+          <Card className="col-span-full">
+            <CardContent className="flex flex-col items-center justify-center p-16">
+              <div className="text-xl text-muted-foreground">加载项目中...</div>
+            </CardContent>
+          </Card>
+        ) : projects.length === 0 ? (
           <Card className="col-span-full">
             <CardContent className="flex flex-col items-center justify-center p-16">
               <h3 className="text-xl font-semibold mb-4">还没有项目</h3>
@@ -203,12 +250,26 @@ export default function HomePage() {
         ) : (
           projects.map((project) => (
             <Card
+              id={`project-card-${project.id}`}
               key={project.id}
-              className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              className={`cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                highlightId === project.id ? 'ring-2 ring-primary/60 bg-primary/5 shadow-lg' : ''
+              }`}
               onClick={() => window.location.href = `/projects/${project.id}`}
             >
               <CardHeader>
-                <CardTitle className="text-xl">{project.name}</CardTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-xl">{project.name}</CardTitle>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={(e) => handleDeleteProject(project, e)}
+                    aria-label={`删除 ${project.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
                 <CardDescription className="leading-6">
                   {project.description}
                 </CardDescription>

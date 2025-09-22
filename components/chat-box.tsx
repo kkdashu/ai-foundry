@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, forwardRef } from 'react'
 import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
+import { DefaultChatTransport, type ToolUIPart } from 'ai'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -49,10 +49,12 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
   const { toast } = useToast()
 
   const { messages, sendMessage, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/ai/chat' })
+    transport: new DefaultChatTransport({ api: '/api/ai/agent' })
   })
   const isLoading = status === 'submitted' || status === 'streaming'
   const [resetKey, setResetKey] = useState(0)
+  const lastCreateHandledIdRef = useRef<string | null>(null)
+  const lastDeleteHandledIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (error) console.error('ChatBox error:', error)
@@ -67,6 +69,107 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
   useEffect(() => {
     setTimeout(() => inputRefObj.current?.focus?.(), 0)
   }, [open, resetKey])
+
+  // Detect successful createProject tool execution and notify app
+  useEffect(() => {
+    if (!messages || messages.length === 0) return
+    const latest = messages[messages.length - 1]
+    if (!latest || latest.id === lastCreateHandledIdRef.current) return
+
+    // Tool UI parts follow the naming pattern: `tool-<toolName>`
+    let part = latest.parts?.find((p: any) => p && p.type === 'tool-createProject') as
+      | ToolUIPart<{ createProject: { input: any; output: any } }>
+      | undefined
+
+    // Fallback: generic UIMessage part from stream with type 'tool-result'
+    if (!part) {
+      const generic = latest.parts?.find((p: any) => p && p.type === 'tool-result' && p.toolName === 'createProject') as any
+      if (generic && generic.result) {
+        const output = generic.result
+        if (output?.ok) {
+          const msg: string = output?.message || (output?.project?.name ? `项目已创建：${output.project.name}` : '项目已创建')
+          showToast(msg)
+          try {
+            window.dispatchEvent(new CustomEvent('project:created', { detail: output?.project }))
+          } catch {}
+          lastCreateHandledIdRef.current = latest.id
+          return
+        }
+      }
+    }
+
+    if (part && (part as any).output) {
+      const state = (part as any).state
+      if (!state || state === 'output-available') {
+        const output: any = (part as any).output
+        if (output?.ok) {
+          const msg: string = output?.message || (output?.project?.name ? `项目已创建：${output.project.name}` : '项目已创建')
+          showToast(msg)
+          try {
+            window.dispatchEvent(new CustomEvent('project:created', { detail: output?.project }))
+          } catch {}
+        }
+        lastCreateHandledIdRef.current = latest.id
+      }
+    }
+  }, [messages])
+
+  // Detect deleteProject tool execution and notify app
+  useEffect(() => {
+    if (!messages || messages.length === 0) return
+    const latest = messages[messages.length - 1]
+    if (!latest || latest.id === lastDeleteHandledIdRef.current) return
+
+    let part = latest.parts?.find((p: any) => p && p.type === 'tool-deleteProject') as
+      | ToolUIPart<{ deleteProject: { input: any; output: any } }>
+      | undefined
+
+    // Fallback: generic part type from stream
+    if (!part) {
+      const generic = latest.parts?.find((p: any) => p && p.type === 'tool-result' && p.toolName === 'deleteProject') as any
+      if (generic && generic.result) {
+        const output = generic.result
+        if (output?.ok === true) {
+          const msg: string = output?.message || (output?.project?.name ? `项目已删除：${output.project.name}` : '项目已删除')
+          showToast(msg)
+          try {
+            window.dispatchEvent(new CustomEvent('project:deleted', { detail: output?.project }))
+          } catch {}
+        } else if (output?.ambiguous || (Array.isArray(output?.candidates) && output.candidates.length > 1)) {
+          const msg: string = output?.message || '找到多个同名项目，请提供要删除的ID'
+          showToast(msg)
+        } else if (output && output.ok === false) {
+          const msg: string = output?.message || '删除失败'
+          toast({ description: msg, variant: 'destructive' })
+        }
+        lastDeleteHandledIdRef.current = latest.id
+        return
+      }
+    }
+
+    if (part && (part as any).output) {
+      const state = (part as any).state
+      if (!state || state === 'output-available' || state === 'output-error') {
+        const output: any = (part as any).output
+        if (output?.ok === true) {
+          const msg: string = output?.message || (output?.project?.name ? `项目已删除：${output.project.name}` : '项目已删除')
+          showToast(msg)
+          try {
+            window.dispatchEvent(new CustomEvent('project:deleted', { detail: output?.project }))
+          } catch {}
+        } else if (output?.ambiguous || (Array.isArray(output?.candidates) && output.candidates.length > 1)) {
+          // Ambiguity: inform user but do not refresh list
+          const msg: string = output?.message || '找到多个同名项目，请提供要删除的ID'
+          showToast(msg)
+        } else if (output && output.ok === false) {
+          // Failure
+          const msg: string = output?.message || '删除失败'
+          toast({ description: msg, variant: 'destructive' })
+        }
+        lastDeleteHandledIdRef.current = latest.id
+      }
+    }
+  }, [messages])
 
   // preview keyboard shortcuts: Space/Escape close
   useEffect(() => {
@@ -305,7 +408,7 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
 
       {/* 聊天窗口 */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 h-[500px] bg-background border rounded-lg shadow-xl">
+        <div className="fixed top-6 bottom-6 right-6 z-50 w-96 bg-background border rounded-lg shadow-xl">
           {panel}
         </div>
       )}

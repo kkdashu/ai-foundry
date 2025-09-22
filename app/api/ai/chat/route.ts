@@ -1,3 +1,4 @@
+import '@/lib/undici-proxy'
 import { google } from '@ai-sdk/google'
 import { streamText, type UIMessage, convertToModelMessages } from 'ai'
 

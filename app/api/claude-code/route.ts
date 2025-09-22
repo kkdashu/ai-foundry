@@ -1,3 +1,4 @@
+import '@/lib/undici-proxy'
 import { NextRequest, NextResponse } from 'next/server';
 import { query, Options } from '@anthropic-ai/claude-code';
 import {
