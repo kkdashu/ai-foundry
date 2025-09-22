@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Project, Task, NewTask } from '../../../lib/types/api'
+import { Project, Task, NewTask, Comment } from '../../../lib/types/api'
 import ChatBox from '@/components/chat-box'
 
 export default function ProjectDetailPage() {
@@ -15,6 +15,9 @@ export default function ProjectDetailPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [comments, setComments] = useState<Record<string, Comment[]>>({})
+  const [commentsLoading, setCommentsLoading] = useState<Record<string, boolean>>({})
   const [newTask, setNewTask] = useState<NewTask>({
     projectId: projectId,
     description: '',
@@ -71,6 +74,27 @@ export default function ProjectDetailPage() {
       setIsLoading(false)
     }
   }
+
+  const fetchComments = async (taskId: string) => {
+    try {
+      setCommentsLoading(prev => ({ ...prev, [taskId]: true }))
+      const res = await fetch(`/api/tasks/${taskId}/comments`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setComments(prev => ({ ...prev, [taskId]: data }))
+    } catch (err) {
+      console.error('Failed to load comments:', err)
+    } finally {
+      setCommentsLoading(prev => ({ ...prev, [taskId]: false }))
+    }
+  }
+
+  // Refresh tasks when ChatBox signals updates (e.g., AI marked as completed)
+  useEffect(() => {
+    const onTaskUpdated = () => fetchTasks()
+    window.addEventListener('task:updated', onTaskUpdated as EventListener)
+    return () => window.removeEventListener('task:updated', onTaskUpdated as EventListener)
+  }, [])
 
   const fetchLocalPath = async () => {
     try {
@@ -182,6 +206,28 @@ export default function ProjectDetailPage() {
     } catch (error) {
       console.error('Error updating task:', error)
       alert('更新任务时出错')
+    }
+  }
+
+  // Hand off a task to AI (Claude Code) to process within this project's cwd
+  const handleProcessTask = async (task: Task) => {
+    try {
+      // Optimistically set in_progress
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'in_progress' } : t))
+      const res = await fetch(`/api/tasks/${task.id}/process`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`)
+      }
+      // Refresh tasks to reflect completion
+      await fetchTasks()
+      if (expandedTaskId === task.id) fetchComments(task.id)
+      console.log('AI task done:', data?.summary)
+    } catch (error: any) {
+      console.error('Error processing task:', error)
+      // Revert to pending on failure
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'pending' } : t))
+      alert(`AI 处理失败：${error?.message || '未知错误'}`)
     }
   }
 
@@ -488,6 +534,11 @@ export default function ProjectDetailPage() {
                         padding: '1rem',
                         boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
                       }}
+                      onClick={() => {
+                        const next = expandedTaskId === task.id ? null : task.id
+                        setExpandedTaskId(next)
+                        if (next) fetchComments(task.id)
+                      }}
                     >
                       {editingTask?.id === task.id ? (
                         <form onSubmit={(e) => {
@@ -566,18 +617,24 @@ export default function ProjectDetailPage() {
                         </form>
                       ) : (
                         <>
-                          <p style={{ margin: '0 0 0.75rem 0', lineHeight: '1.4', fontSize: '0.95rem' }}>
-                            {task.description}
-                          </p>
-                          <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontSize: '0.8rem',
-                            color: '#6b7280'
-                          }}>
-                            <span>创建于 {formatDate(task.createdAt)}</span>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {/* Row 1: buttons */}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                              <button
+                                onClick={() => handleProcessTask(task)}
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  color: '#16a34a',
+                                  border: 'none',
+                                  padding: '2px 6px',
+                                  borderRadius: '3px',
+                                  fontSize: '0.8rem',
+                                  cursor: 'pointer'
+                                }}
+                                title="交给 AI 处理"
+                              >
+                                AI处理
+                              </button>
                               <button
                                 onClick={() => setEditingTask(task)}
                                 style={{
@@ -608,6 +665,52 @@ export default function ProjectDetailPage() {
                               </button>
                             </div>
                           </div>
+                          {/* Row 2: content */}
+                          <p style={{ margin: '0.5rem 0 0.5rem 0', lineHeight: '1.5', fontSize: '0.95rem' }}>
+                            {task.description}
+                          </p>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '0.8rem',
+                            color: '#6b7280',
+                            marginTop: '0.25rem'
+                          }}>
+                            <span>创建于 {formatDate(task.createdAt)}</span>
+                          </div>
+                          {expandedTaskId === task.id && (
+                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#111827' }}>评论</div>
+                              {commentsLoading[task.id] ? (
+                                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>加载评论中...</div>
+                              ) : (comments[task.id] && comments[task.id].length > 0) ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                  {comments[task.id].map((c) => (
+                                    <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '0.5rem 0.75rem', backgroundColor: '#fafafa' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ fontSize: '0.85rem', color: '#374151' }}>
+                                          <span style={{ fontWeight: 600 }}>{c.author}</span>
+                                          <span style={{ marginLeft: 8, color: '#6b7280' }}>{new Date(c.createdAt as any).toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                      <div style={{ marginTop: 6, fontSize: '0.9rem', color: '#111827', whiteSpace: 'pre-wrap' }}>
+                                        {c.summary}
+                                      </div>
+                                      <details style={{ marginTop: 6 }}>
+                                        <summary style={{ cursor: 'pointer', color: '#2563eb', fontSize: '0.85rem' }}>查看过程（原始事件/输出）</summary>
+                                        <pre style={{ marginTop: 6, overflow: 'auto', maxHeight: 240, fontSize: '0.75rem', backgroundColor: '#fff', padding: '0.5rem', border: '1px solid #eee', borderRadius: 4 }}>
+{JSON.stringify(c.content, null, 2)}
+                                        </pre>
+                                      </details>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div style={{ color: '#6b7280', fontStyle: 'italic' }}>暂无评论</div>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

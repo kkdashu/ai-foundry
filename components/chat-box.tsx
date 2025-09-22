@@ -51,6 +51,8 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
   const [boundPath, setBoundPath] = useState<string | null>(null)
   const [boundLoading, setBoundLoading] = useState(false)
   const [ccSession, setCcSession] = useState<string | null>(null)
+  const [processingTaskId, setProcessingTaskId] = useState<string | null>(null)
+  const [processingTaskDesc, setProcessingTaskDesc] = useState<string | null>(null)
 
   // Load existing cc session for this project on mount
   useEffect(() => {
@@ -207,6 +209,24 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
     }
   }, [messages, projectId])
 
+  // Listen for external task processing requests
+  useEffect(() => {
+    const handler = (ev: any) => {
+      const detail = ev?.detail || {}
+      if (!detail || !detail.prompt) return
+      if (projectId && detail.projectId && detail.projectId !== projectId) return
+      setProcessingTaskId(detail.taskId || null)
+      setProcessingTaskDesc(detail.description || null)
+      setOpen(true)
+      // send message immediately
+      sendMessage({ role: 'user', parts: [{ type: 'text', text: detail.prompt }] as any }).catch((err) => {
+        console.error('Failed to trigger AI processing:', err)
+      })
+    }
+    window.addEventListener('ai:process-task', handler as EventListener)
+    return () => window.removeEventListener('ai:process-task', handler as EventListener)
+  }, [projectId, sendMessage])
+
   // Fetch bound local path for the project (for gating and display)
   useEffect(() => {
     if (!projectId) return
@@ -317,6 +337,29 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
       console.error('sendMessage failed:', err)
     }
   }
+
+  // When a task is being processed and streaming finishes (status back to ready), mark completed
+  useEffect(() => {
+    if (!processingTaskId) return
+    if (status !== 'ready') return
+    // Debounce to end of tick to allow last message flush
+    const id = setTimeout(async () => {
+      try {
+        await fetch(`/api/tasks/${processingTaskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'completed', description: processingTaskDesc ?? '' }),
+        })
+        try { window.dispatchEvent(new CustomEvent('task:updated', { detail: { id: processingTaskId } })) } catch {}
+      } catch (err) {
+        console.error('Failed to complete task after AI processing:', err)
+      } finally {
+        setProcessingTaskId(null)
+        setProcessingTaskDesc(null)
+      }
+    }, 0)
+    return () => clearTimeout(id)
+  }, [status, processingTaskId, processingTaskDesc])
 
   const panel = (
     <Card
