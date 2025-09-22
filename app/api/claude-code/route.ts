@@ -1,6 +1,7 @@
 import '@/lib/undici-proxy'
 import { NextRequest, NextResponse } from 'next/server';
 import { query, Options } from '@anthropic-ai/claude-code';
+import { getLocalPath } from '@/lib/local/registry'
 import {
   ClaudeCodeRequest,
   ClaudeCodeStreamResponse,
@@ -29,6 +30,15 @@ export async function POST(request: NextRequest) {
     const options: Options = {
       permissionMode: permissionMode || 'bypassPermissions', // 使用用户选择的权限模式
     };
+
+    // Optional: project context via header or query for project-scoped chats
+    const url = new URL(request.url)
+    const projectId = request.headers.get('x-project-id') || url.searchParams.get('projectId') || undefined
+    const ccSession = request.headers.get('x-cc-session') || url.searchParams.get('ccSession') || undefined
+    if (projectId) {
+      const cwd = await getLocalPath(projectId)
+      if (cwd) (options as any).cwd = cwd
+    }
 
     // 支持上下文共享
     if (continueConversation) {
@@ -85,7 +95,10 @@ export async function POST(request: NextRequest) {
 
     const claudeQuery = query({
       prompt: messageContent,
-      options: options
+      options: {
+        ...options,
+        ...(ccSession ? { continue: true, resume: ccSession } : {}),
+      }
     });
 
     // 创建流式响应

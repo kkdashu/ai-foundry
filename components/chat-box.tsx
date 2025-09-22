@@ -35,9 +35,10 @@ type ChatBoxProps = {
   variant?: 'floating' | 'embedded'
   title?: string
   className?: string
+  projectId?: string
 }
 
-export function ChatBox({ variant = 'floating', title = 'AI 助手', className }: ChatBoxProps) {
+export function ChatBox({ variant = 'floating', title = 'AI 助手', className, projectId }: ChatBoxProps) {
   const [open, setOpen] = useState(variant === 'embedded')
   const [localInput, setLocalInput] = useState('')
   const inputRefObj = useRef<HTMLTextAreaElement | null>(null)
@@ -47,9 +48,29 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
   const [dragActive, setDragActive] = useState(false)
   const dragCounter = useRef(0)
   const { toast } = useToast()
+  const [boundPath, setBoundPath] = useState<string | null>(null)
+  const [boundLoading, setBoundLoading] = useState(false)
+  const [ccSession, setCcSession] = useState<string | null>(null)
+
+  // Load existing cc session for this project on mount
+  useEffect(() => {
+    if (projectId) {
+      try {
+        const sid = localStorage.getItem(`cc-session-${projectId}`)
+        if (sid) setCcSession(sid)
+      } catch {}
+    }
+  }, [projectId])
 
   const { messages, sendMessage, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/ai/agent' })
+    transport: new DefaultChatTransport({
+      api: projectId
+        ? `/api/ai/agent?projectId=${encodeURIComponent(projectId)}${ccSession ? `&ccSession=${encodeURIComponent(ccSession)}` : ''}`
+        : '/api/ai/agent',
+      headers: projectId
+        ? { 'X-Project-Id': projectId, ...(ccSession ? { 'X-CC-Session': ccSession } : {}) }
+        : undefined,
+    })
   })
   const isLoading = status === 'submitted' || status === 'streaming'
   const [resetKey, setResetKey] = useState(0)
@@ -171,6 +192,44 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
     }
   }, [messages])
 
+  // Detect claudeCode tool result to persist sessionId per project
+  useEffect(() => {
+    if (!projectId || !messages || messages.length === 0) return
+    const latest = messages[messages.length - 1]
+    const generic = latest.parts?.find((p: any) => p && p.type === 'tool-result' && p.toolName === 'claudeCode') as any
+    const toolPart = latest.parts?.find((p: any) => p && p.type === 'tool-claudeCode') as any
+    const output = (generic && generic.result) || (toolPart && toolPart.output)
+    if (output && output.sessionId) {
+      try {
+        localStorage.setItem(`cc-session-${projectId}`, output.sessionId)
+      } catch {}
+      setCcSession(output.sessionId)
+    }
+  }, [messages, projectId])
+
+  // Fetch bound local path for the project (for gating and display)
+  useEffect(() => {
+    if (!projectId) return
+    let aborted = false
+    const run = async () => {
+      try {
+        setBoundLoading(true)
+        const res = await fetch(`/api/local/project-paths/${projectId}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (!aborted) setBoundPath(data?.path || null)
+      } catch (err) {
+        if (!aborted) setBoundPath(null)
+      } finally {
+        if (!aborted) setBoundLoading(false)
+      }
+    }
+    run()
+    return () => {
+      aborted = true
+    }
+  }, [projectId, open])
+
   // preview keyboard shortcuts: Space/Escape close
   useEffect(() => {
     if (!previewSrc) return
@@ -236,6 +295,10 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
     message: { text?: string; files?: any[] },
     _event: React.FormEvent<HTMLFormElement>
   ) => {
+    if (projectId && !boundPath) {
+      showToast('未绑定本地目录，请先在页面上方绑定后再试')
+      return
+    }
     const text = message.text?.trim() ?? ''
     const files = await convertFilePartsToDataUrls(message.files ?? [])
     if (!text && files.length === 0) return
@@ -279,7 +342,14 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className }
             </Button>
           )}
         </div>
-        <CardDescription>支持文本与图片消息</CardDescription>
+        <CardDescription>
+          支持文本与图片消息
+          {projectId && (
+            <span className="block mt-1 text-xs text-muted-foreground">
+              {boundLoading ? '正在检查本地目录…' : boundPath ? `基于：${boundPath}` : '未绑定本地目录（请在页面上方绑定）'}
+            </span>
+          )}
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col p-0 min-h-0">

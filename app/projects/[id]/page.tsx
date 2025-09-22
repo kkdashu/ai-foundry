@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Project, Task, NewTask } from '../../../lib/types/api'
+import ChatBox from '@/components/chat-box'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -20,6 +21,11 @@ export default function ProjectDetailPage() {
     status: 'pending'
   })
 
+  // Local path binding state
+  const [localPath, setLocalPath] = useState<string>('')
+  const [pathLoading, setPathLoading] = useState<boolean>(false)
+  const [pathError, setPathError] = useState<string | null>(null)
+
   const statusOptions = [
     { value: 'pending', label: '待处理', color: '#f59e0b' },
     { value: 'in_progress', label: '进行中', color: '#3b82f6' },
@@ -31,6 +37,7 @@ export default function ProjectDetailPage() {
     if (projectId) {
       fetchProject()
       fetchTasks()
+      fetchLocalPath()
     }
   }, [projectId])
 
@@ -62,6 +69,61 @@ export default function ProjectDetailPage() {
       console.error('Error fetching tasks:', error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchLocalPath = async () => {
+    try {
+      setPathLoading(true)
+      const res = await fetch(`/api/local/project-paths/${projectId}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setLocalPath(data?.path || '')
+      setPathError(null)
+    } catch (err: any) {
+      setLocalPath('')
+      setPathError(null) // GET returns 200 with null path; ignore
+    } finally {
+      setPathLoading(false)
+    }
+  }
+
+  const saveLocalPath = async () => {
+    if (!localPath.trim()) {
+      alert('请输入本地目录的绝对路径')
+      return
+    }
+    try {
+      setPathLoading(true)
+      const res = await fetch(`/api/local/project-paths/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: localPath }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setLocalPath(data?.path || localPath)
+      setPathError(null)
+      alert('已绑定到本地目录')
+    } catch (err: any) {
+      setPathError(err?.message || '路径无效或不可访问')
+      alert(`绑定失败：${err?.message || '未知错误'}`)
+    } finally {
+      setPathLoading(false)
+    }
+  }
+
+  const removeLocalBinding = async () => {
+    try {
+      setPathLoading(true)
+      const res = await fetch(`/api/local/project-paths/${projectId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setLocalPath('')
+      setPathError(null)
+    } catch (err: any) {
+      alert(`解绑失败：${err?.message || '未知错误'}`)
+    } finally {
+      setPathLoading(false)
     }
   }
 
@@ -165,7 +227,7 @@ export default function ProjectDetailPage() {
 
   if (!project) {
     return (
-      <div className="container">
+      <div className="container mx-auto max-w-6xl p-4">
         <div style={{ textAlign: 'center', padding: '4rem' }}>
           <div style={{ fontSize: '1.2rem', color: '#666' }}>加载项目中...</div>
         </div>
@@ -174,7 +236,8 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <div className="container">
+    <>
+    <div className="container mx-auto max-w-6xl p-4">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
@@ -212,6 +275,41 @@ export default function ProjectDetailPage() {
               🔗 Git 仓库
             </a>
           )}
+          {/* Local path binding UI */}
+          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            <div style={{ fontSize: 13, color: '#374151', marginBottom: 6 }}>本地目录绑定</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={localPath}
+                onChange={(e) => setLocalPath(e.target.value)}
+                placeholder="例如：/Users/you/code/my-project 或 C:\\code\\my-project"
+                style={{ flex: 1, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
+              />
+              <button
+                onClick={saveLocalPath}
+                disabled={pathLoading}
+                style={{ backgroundColor: '#2563EB', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}
+              >
+                保存
+              </button>
+              {localPath && (
+                <button
+                  onClick={removeLocalBinding}
+                  disabled={pathLoading}
+                  style={{ backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  解绑
+                </button>
+              )}
+            </div>
+            {pathError && (
+              <div style={{ color: '#ef4444', marginTop: 6, fontSize: 12 }}>错误：{pathError}</div>
+            )}
+            <div style={{ color: '#6b7280', marginTop: 6, fontSize: 12 }}>
+              提示：该路径仅保存在本机（~/.config/ai-foundry/local-projects.json）。
+            </div>
+          </div>
         </div>
         <button
           onClick={() => setShowCreateForm(true)}
@@ -521,5 +619,8 @@ export default function ProjectDetailPage() {
         </div>
       )}
     </div>
+    {/* Scoped AI Chat for this project (passes projectId via header) */}
+    <ChatBox variant="floating" projectId={projectId} />
+    </>
   )
 }
