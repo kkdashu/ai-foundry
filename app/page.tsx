@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Project, NewProject } from '../lib/types/api'
+import { api } from '@/lib/trpc/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -14,8 +15,16 @@ import { Trash2 } from 'lucide-react'
 import ChatBox from '@/components/chat-box'
 
 export default function HomePage() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const utils = api.useUtils()
+  const { data: projects = [], isLoading } = api.projects.list.useQuery()
+  const createMutation = api.projects.create.useMutation({
+    onSuccess: async (created) => {
+      await utils.projects.list.invalidate()
+      setNewProject({ name: '', description: '', repositoryUrl: '' })
+      setShowCreateForm(false)
+      try { window.dispatchEvent(new CustomEvent('project:created', { detail: created })) } catch {}
+    },
+  })
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [showChat, setShowChat] = useState(false)
@@ -30,7 +39,7 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    fetchProjects()
+    // no-op: projects are loaded via tRPC query
   }, [])
 
   // Listen for project creation/deletion events from the Agent chat and refresh list
@@ -39,7 +48,7 @@ export default function HomePage() {
       const id = e?.detail?.id
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
       setHighlightId(id ?? null)
-      fetchProjects().then(() => {
+      utils.projects.list.invalidate().then(() => {
         if (!id) return
         // Scroll the new card into view after render
         requestAnimationFrame(() => {
@@ -50,7 +59,7 @@ export default function HomePage() {
       // Clear highlight after 2.5s
       highlightTimerRef.current = setTimeout(() => setHighlightId(null), 2500)
     }
-    const onDeleted = () => fetchProjects()
+    const onDeleted = () => { utils.projects.list.invalidate() }
     window.addEventListener('project:created', onCreated as EventListener)
     window.addEventListener('project:deleted', onDeleted as EventListener)
     return () => {
@@ -60,17 +69,17 @@ export default function HomePage() {
     }
   }, [])
 
+  const deleteMutation = api.projects.delete.useMutation({
+    onSuccess: async () => {
+      await utils.projects.list.invalidate()
+    },
+  })
   const handleDeleteProject = async (project: Project, e: React.MouseEvent) => {
     e.stopPropagation()
     const confirmed = window.confirm(`确认删除项目：“${project.name}”？`)
     if (!confirmed) return
     try {
-      const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(data?.error || `HTTP ${res.status}`)
-      }
-      setProjects(prev => prev.filter(p => p.id !== project.id))
+      await deleteMutation.mutateAsync({ id: project.id })
       toast({ description: `已删除项目：${project.name}` })
       try { window.dispatchEvent(new CustomEvent('project:deleted', { detail: project })) } catch {}
     } catch (err: any) {
@@ -79,22 +88,6 @@ export default function HomePage() {
     }
   }
 
-  const fetchProjects = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch('/api/projects')
-      if (response.ok) {
-        const data = await response.json()
-        setProjects(data)
-      } else {
-        console.error('Failed to fetch projects')
-      }
-    } catch (error) {
-      console.error('Error fetching projects:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,22 +98,7 @@ export default function HomePage() {
 
     try {
       setIsCreating(true)
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newProject),
-      })
-
-      if (response.ok) {
-        const createdProject = await response.json()
-        setProjects(prev => [...prev, createdProject])
-        setNewProject({ name: '', description: '', repositoryUrl: '' })
-        setShowCreateForm(false)
-      } else {
-        alert('创建项目失败')
-      }
+      await createMutation.mutateAsync(newProject as any)
     } catch (error) {
       console.error('Error creating project:', error)
       alert('创建项目时出错')

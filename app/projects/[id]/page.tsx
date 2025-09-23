@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Project, Task, NewTask, Comment } from '../../../lib/types/api'
 import ChatBox from '@/components/chat-box'
+import { api } from '@/lib/trpc/client'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -36,52 +37,35 @@ export default function ProjectDetailPage() {
     { value: 'cancelled', label: '已取消', color: '#ef4444' }
   ]
 
+  const utils = api.useUtils()
+  const projectQuery = api.projects.getById.useQuery({ id: projectId }, { enabled: !!projectId })
+  const tasksQuery = api.tasks.list.useQuery({ projectId }, { enabled: !!projectId })
+
   useEffect(() => {
-    if (projectId) {
-      fetchProject()
-      fetchTasks()
-      fetchLocalPath()
-    }
-  }, [projectId])
+    if (projectQuery.data) setProject(projectQuery.data as any)
+  }, [projectQuery.data])
 
-  const fetchProject = async () => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setProject(data)
-      } else {
-        console.error('Failed to fetch project')
-      }
-    } catch (error) {
-      console.error('Error fetching project:', error)
-    }
-  }
+  useEffect(() => {
+    if (tasksQuery.data) setTasks(tasksQuery.data as any)
+    setIsLoading(tasksQuery.isLoading)
+  }, [tasksQuery.data, tasksQuery.isLoading])
 
-  const fetchTasks = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch(`/api/tasks?projectId=${projectId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setTasks(data)
-      } else {
-        console.error('Failed to fetch tasks')
-      }
-    } catch (error) {
-      console.error('Error fetching tasks:', error)
-    } finally {
-      setIsLoading(false)
+  // Local path via tRPC
+  const localPathQuery = api.local.getPath.useQuery({ projectId }, { enabled: !!projectId })
+  useEffect(() => {
+    if (localPathQuery.data) {
+      setLocalPath(localPathQuery.data.path || '')
+      setPathError(null)
     }
-  }
+  }, [localPathQuery.data])
+
+  // Removed REST fetchProject/fetchTasks; using tRPC queries instead
 
   const fetchComments = async (taskId: string) => {
     try {
       setCommentsLoading(prev => ({ ...prev, [taskId]: true }))
-      const res = await fetch(`/api/tasks/${taskId}/comments`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setComments(prev => ({ ...prev, [taskId]: data }))
+      const data = await utils.comments.listByTask.fetch({ taskId })
+      setComments(prev => ({ ...prev, [taskId]: data as any }))
     } catch (err) {
       console.error('Failed to load comments:', err)
     } finally {
@@ -91,26 +75,14 @@ export default function ProjectDetailPage() {
 
   // Refresh tasks when ChatBox signals updates (e.g., AI marked as completed)
   useEffect(() => {
-    const onTaskUpdated = () => fetchTasks()
+    const onTaskUpdated = () => utils.tasks.list.invalidate({ projectId })
     window.addEventListener('task:updated', onTaskUpdated as EventListener)
     return () => window.removeEventListener('task:updated', onTaskUpdated as EventListener)
-  }, [])
+  }, [projectId])
 
-  const fetchLocalPath = async () => {
-    try {
-      setPathLoading(true)
-      const res = await fetch(`/api/local/project-paths/${projectId}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setLocalPath(data?.path || '')
-      setPathError(null)
-    } catch (err: any) {
-      setLocalPath('')
-      setPathError(null) // GET returns 200 with null path; ignore
-    } finally {
-      setPathLoading(false)
-    }
-  }
+  // Mutations for local path
+  const setPathMutation = api.local.setPath.useMutation({ onSuccess: () => localPathQuery.refetch() })
+  const removePathMutation = api.local.removePath.useMutation({ onSuccess: () => localPathQuery.refetch() })
 
   const saveLocalPath = async () => {
     if (!localPath.trim()) {
@@ -119,14 +91,8 @@ export default function ProjectDetailPage() {
     }
     try {
       setPathLoading(true)
-      const res = await fetch(`/api/local/project-paths/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: localPath }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      setLocalPath(data?.path || localPath)
+      const res = await setPathMutation.mutateAsync({ projectId, path: localPath })
+      setLocalPath(res.path)
       setPathError(null)
       alert('已绑定到本地目录')
     } catch (err: any) {
@@ -140,8 +106,7 @@ export default function ProjectDetailPage() {
   const removeLocalBinding = async () => {
     try {
       setPathLoading(true)
-      const res = await fetch(`/api/local/project-paths/${projectId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await removePathMutation.mutateAsync({ projectId })
       setLocalPath('')
       setPathError(null)
     } catch (err: any) {
@@ -151,6 +116,7 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const createTaskMutation = api.tasks.create.useMutation({ onSuccess: () => utils.tasks.list.invalidate({ projectId }) })
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newTask.description.trim()) {
@@ -160,22 +126,9 @@ export default function ProjectDetailPage() {
 
     try {
       setIsCreating(true)
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newTask),
-      })
-
-      if (response.ok) {
-        const createdTask = await response.json()
-        setTasks(prev => [...prev, createdTask])
-        setNewTask({ projectId: projectId, description: '', status: 'pending' })
-        setShowCreateForm(false)
-      } else {
-        alert('创建任务失败')
-      }
+      await createTaskMutation.mutateAsync(newTask as any)
+      setNewTask({ projectId: projectId, description: '', status: 'pending' })
+      setShowCreateForm(false)
     } catch (error) {
       console.error('Error creating task:', error)
       alert('创建任务时出错')
@@ -184,25 +137,11 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const updateTaskMutation = api.tasks.update.useMutation({ onSuccess: () => utils.tasks.list.invalidate({ projectId }) })
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      })
-
-      if (response.ok) {
-        const updatedTask = await response.json()
-        setTasks(prev => prev.map(task =>
-          task.id === taskId ? updatedTask : task
-        ))
-        setEditingTask(null)
-      } else {
-        alert('更新任务失败')
-      }
+      await updateTaskMutation.mutateAsync({ id: taskId, description: updates.description as any, status: updates.status as any })
+      setEditingTask(null)
     } catch (error) {
       console.error('Error updating task:', error)
       alert('更新任务时出错')
@@ -210,42 +149,33 @@ export default function ProjectDetailPage() {
   }
 
   // Hand off a task to AI (Claude Code) to process within this project's cwd
+  const processTaskMutation = api.tasks.process.useMutation({
+    onSuccess: async (_, vars) => {
+      await utils.tasks.list.invalidate({ projectId })
+      if (expandedTaskId === vars.id) await utils.comments.listByTask.invalidate({ taskId: vars.id })
+      if (expandedTaskId === vars.id) fetchComments(vars.id)
+    },
+  })
   const handleProcessTask = async (task: Task) => {
     try {
-      // Optimistically set in_progress
+      // optimistic
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'in_progress' } : t))
-      const res = await fetch(`/api/tasks/${task.id}/process`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`)
-      }
-      // Refresh tasks to reflect completion
-      await fetchTasks()
-      if (expandedTaskId === task.id) fetchComments(task.id)
-      console.log('AI task done:', data?.summary)
+      await processTaskMutation.mutateAsync({ id: task.id })
     } catch (error: any) {
       console.error('Error processing task:', error)
-      // Revert to pending on failure
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'pending' } : t))
       alert(`AI 处理失败：${error?.message || '未知错误'}`)
     }
   }
 
+  const deleteTaskMutation = api.tasks.delete.useMutation({ onSuccess: () => utils.tasks.list.invalidate({ projectId }) })
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm('确定要删除这个任务吗？')) {
       return
     }
 
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        setTasks(prev => prev.filter(task => task.id !== taskId))
-      } else {
-        alert('删除任务失败')
-      }
+      await deleteTaskMutation.mutateAsync({ id: taskId })
     } catch (error) {
       console.error('Error deleting task:', error)
       alert('删除任务时出错')
@@ -353,7 +283,7 @@ export default function ProjectDetailPage() {
               <div style={{ color: '#ef4444', marginTop: 6, fontSize: 12 }}>错误：{pathError}</div>
             )}
             <div style={{ color: '#6b7280', marginTop: 6, fontSize: 12 }}>
-              提示：该路径仅保存在本机（~/.config/ai-foundry/local-projects.json）。
+              提示：该路径仅保存在本机（{localPathQuery.data?.registry || '~/.config/ai-foundry/local-projects.json'}）。
             </div>
           </div>
         </div>

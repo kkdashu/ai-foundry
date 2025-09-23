@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, forwardRef } from 'react'
+import { api } from '@/lib/trpc/client'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type ToolUIPart } from 'ai'
 import { Button } from '@/components/ui/button'
@@ -209,46 +210,16 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
     }
   }, [messages, projectId])
 
-  // Listen for external task processing requests
-  useEffect(() => {
-    const handler = (ev: any) => {
-      const detail = ev?.detail || {}
-      if (!detail || !detail.prompt) return
-      if (projectId && detail.projectId && detail.projectId !== projectId) return
-      setProcessingTaskId(detail.taskId || null)
-      setProcessingTaskDesc(detail.description || null)
-      setOpen(true)
-      // send message immediately
-      sendMessage({ role: 'user', parts: [{ type: 'text', text: detail.prompt }] as any }).catch((err) => {
-        console.error('Failed to trigger AI processing:', err)
-      })
-    }
-    window.addEventListener('ai:process-task', handler as EventListener)
-    return () => window.removeEventListener('ai:process-task', handler as EventListener)
-  }, [projectId, sendMessage])
+  // Previously listened for ai:process-task events to run jobs via ChatBox.
+  // This flow is now handled entirely by server-side tRPC mutations (tasks.process),
+  // so we do not auto-run background tasks from the chat anymore.
 
-  // Fetch bound local path for the project (for gating and display)
+  // Fetch bound local path via tRPC (for gating and display)
+  const localQuery = api.local.getPath.useQuery({ projectId: projectId || '' }, { enabled: !!projectId && open })
   useEffect(() => {
-    if (!projectId) return
-    let aborted = false
-    const run = async () => {
-      try {
-        setBoundLoading(true)
-        const res = await fetch(`/api/local/project-paths/${projectId}`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        if (!aborted) setBoundPath(data?.path || null)
-      } catch (err) {
-        if (!aborted) setBoundPath(null)
-      } finally {
-        if (!aborted) setBoundLoading(false)
-      }
-    }
-    run()
-    return () => {
-      aborted = true
-    }
-  }, [projectId, open])
+    setBoundLoading(localQuery.isLoading)
+    setBoundPath(localQuery.data?.path ?? null)
+  }, [localQuery.data, localQuery.isLoading])
 
   // preview keyboard shortcuts: Space/Escape close
   useEffect(() => {
@@ -338,28 +309,7 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
     }
   }
 
-  // When a task is being processed and streaming finishes (status back to ready), mark completed
-  useEffect(() => {
-    if (!processingTaskId) return
-    if (status !== 'ready') return
-    // Debounce to end of tick to allow last message flush
-    const id = setTimeout(async () => {
-      try {
-        await fetch(`/api/tasks/${processingTaskId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'completed', description: processingTaskDesc ?? '' }),
-        })
-        try { window.dispatchEvent(new CustomEvent('task:updated', { detail: { id: processingTaskId } })) } catch {}
-      } catch (err) {
-        console.error('Failed to complete task after AI processing:', err)
-      } finally {
-        setProcessingTaskId(null)
-        setProcessingTaskDesc(null)
-      }
-    }, 0)
-    return () => clearTimeout(id)
-  }, [status, processingTaskId, processingTaskDesc])
+  // Background task completion logic removed (now handled by server mutation).
 
   const panel = (
     <Card

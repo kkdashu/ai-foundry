@@ -1,0 +1,50 @@
+import { z } from 'zod'
+
+export const ProjectSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string(),
+  repositoryUrl: z.string().url().nullable().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const NewProjectSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  repositoryUrl: z.string().url().optional().nullable(),
+})
+
+export const TaskSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  description: z.string(),
+  status: z.string(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+})
+
+export const NewTaskSchema = z.object({
+  projectId: z.string().uuid(),
+  description: z.string().min(1),
+  status: z.string().optional(),
+})
+
+export const CommentSchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  author: z.string(),
+  summary: z.string(),
+  content: z.any(),
+  createdAt: z.coerce.date(),
+})
+
+export const ApiErrorSchema = z.object({ error: z.string() })
+
+export type ProjectDto = z.infer<typeof ProjectSchema>
+export type NewProjectDto = z.infer<typeof NewProjectSchema>
+export type TaskDto = z.infer<typeof TaskSchema>
+export type NewTaskDto = z.infer<typeof NewTaskSchema>
+export type CommentDto = z.infer<typeof CommentSchema>
+export type ApiErrorDto = z.infer<typeof ApiErrorSchema>
+
