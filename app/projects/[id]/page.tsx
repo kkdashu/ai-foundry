@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Project, Task, NewTask, Comment } from '../../../lib/types/api'
+import { Project, Task, NewTask, Comment, Landmark } from '../../../lib/types/api'
 import ChatBox from '@/components/chat-box'
 import { api } from '@/lib/trpc/client'
 
@@ -13,8 +13,12 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [landmarks, setLandmarks] = useState<Landmark[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [showCreateLandmarkForm, setShowCreateLandmarkForm] = useState(false)
+  const [newLandmarkName, setNewLandmarkName] = useState('')
+  const [isCreatingLandmark, setIsCreatingLandmark] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [comments, setComments] = useState<Record<string, Comment[]>>({})
@@ -40,6 +44,7 @@ export default function ProjectDetailPage() {
   const utils = api.useUtils()
   const projectQuery = api.projects.getById.useQuery({ id: projectId }, { enabled: !!projectId })
   const tasksQuery = api.tasks.list.useQuery({ projectId }, { enabled: !!projectId })
+  const landmarksQuery = api.landmarks.listByProject.useQuery({ projectId }, { enabled: !!projectId })
 
   useEffect(() => {
     if (projectQuery.data) setProject(projectQuery.data as any)
@@ -49,6 +54,10 @@ export default function ProjectDetailPage() {
     if (tasksQuery.data) setTasks(tasksQuery.data as any)
     setIsLoading(tasksQuery.isLoading)
   }, [tasksQuery.data, tasksQuery.isLoading])
+
+  useEffect(() => {
+    if (landmarksQuery.data) setLandmarks(landmarksQuery.data as any)
+  }, [landmarksQuery.data])
 
   // Local path via tRPC
   const localPathQuery = api.local.getPath.useQuery({ projectId }, { enabled: !!projectId })
@@ -201,6 +210,24 @@ export default function ProjectDetailPage() {
     tasks: tasks.filter(task => task.status === status.value)
   }))
 
+  // Landmarks mutations
+  const createLandmarkMutation = api.landmarks.create.useMutation({ onSuccess: () => landmarksQuery.refetch() })
+  const handleCreateLandmark = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newLandmarkName.trim()) return
+    try {
+      setIsCreatingLandmark(true)
+      await createLandmarkMutation.mutateAsync({ projectId, name: newLandmarkName.trim() } as any)
+      setNewLandmarkName('')
+      setShowCreateLandmarkForm(false)
+    } catch (err) {
+      console.error('Create landmark failed', err)
+      alert('创建里程碑失败')
+    } finally {
+      setIsCreatingLandmark(false)
+    }
+  }
+
   if (!project) {
     return (
       <div className="container mx-auto max-w-6xl p-4">
@@ -287,23 +314,42 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          style={{
-            backgroundColor: '#22c55e',
-            color: 'white',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '6px',
-            fontSize: '1rem',
-            cursor: 'pointer',
-            transition: 'background-color 0.2s'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#22c55e'}
-        >
-          + 新建任务
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setShowCreateLandmarkForm(true)}
+            style={{
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              padding: '10px 16px',
+              borderRadius: '6px',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+          >
+            + 新建里程碑
+          </button>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            style={{
+              backgroundColor: '#22c55e',
+              color: 'white',
+              border: 'none',
+              padding: '10px 16px',
+              borderRadius: '6px',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#22c55e'}
+          >
+            + 新建任务
+          </button>
+        </div>
       </div>
 
       {showCreateForm && (
@@ -329,6 +375,28 @@ export default function ProjectDetailPage() {
           }}>
             <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>创建新任务</h2>
             <form onSubmit={handleCreateTask}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  里程碑
+                </label>
+                <select
+                  value={(newTask as any).landmarkId || ''}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, landmarkId: e.target.value || undefined } as any))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="">未分组</option>
+                  {landmarks.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                   任务描述 *
@@ -409,246 +477,144 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
+      {showCreateLandmarkForm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: 8, minWidth: 360, boxShadow: '0 4px 20px rgba(0,0,0,.3)' }}>
+            <h2 style={{ marginTop: 0, marginBottom: '1rem' }}>创建里程碑</h2>
+            <form onSubmit={handleCreateLandmark}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>名称 *</label>
+                <input
+                  type="text"
+                  value={newLandmarkName}
+                  onChange={(e) => setNewLandmarkName(e.target.value)}
+                  placeholder="例如：V1.0 发布前"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 4, fontSize: 14 }}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowCreateLandmarkForm(false)} style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '8px 12px', borderRadius: 4 }}>取消</button>
+                <button type="submit" disabled={isCreatingLandmark} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 4 }}>{isCreatingLandmark ? '创建中...' : '创建'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <div style={{ fontSize: '1.1rem', color: '#666' }}>加载任务中...</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-          {tasksByStatus.map((statusGroup) => (
-            <div key={statusGroup.value} style={{
-              backgroundColor: '#f9fafb',
-              borderRadius: '8px',
-              padding: '1rem',
-              border: '1px solid #e5e7eb'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                marginBottom: '1rem',
-                paddingBottom: '0.5rem',
-                borderBottom: '2px solid #e5e7eb'
-              }}>
-                <div
-                  style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: statusGroup.color
-                  }}
-                />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold' }}>
-                  {statusGroup.label} ({statusGroup.tasks.length})
-                </h3>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {statusGroup.tasks.length === 0 ? (
-                  <div style={{
-                    textAlign: 'center',
-                    color: '#9ca3af',
-                    padding: '1rem',
-                    fontStyle: 'italic'
-                  }}>
-                    暂无任务
-                  </div>
-                ) : (
-                  statusGroup.tasks.map((task) => (
-                    <div
-                      key={task.id}
-                      style={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '6px',
-                        padding: '1rem',
-                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
-                      }}
-                      onClick={() => {
-                        const next = expandedTaskId === task.id ? null : task.id
-                        setExpandedTaskId(next)
-                        if (next) fetchComments(task.id)
-                      }}
-                    >
-                      {editingTask?.id === task.id ? (
-                        <form onSubmit={(e) => {
-                          e.preventDefault()
-                          const formData = new FormData(e.currentTarget)
-                          handleUpdateTask(task.id, {
-                            description: formData.get('description') as string,
-                            status: formData.get('status') as string
-                          })
-                        }}>
-                          <textarea
-                            name="description"
-                            defaultValue={task.description}
-                            style={{
-                              width: '100%',
-                              padding: '8px',
-                              border: '1px solid #ddd',
-                              borderRadius: '4px',
-                              fontSize: '0.9rem',
-                              minHeight: '60px',
-                              marginBottom: '0.5rem',
-                              boxSizing: 'border-box'
-                            }}
-                            required
-                          />
-                          <select
-                            name="status"
-                            defaultValue={task.status}
-                            style={{
-                              width: '100%',
-                              padding: '4px 8px',
-                              border: '1px solid #ddd',
-                              borderRadius: '4px',
-                              fontSize: '0.85rem',
-                              marginBottom: '0.5rem',
-                              boxSizing: 'border-box'
-                            }}
-                          >
-                            {statusOptions.map(option => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button
-                              type="submit"
-                              style={{
-                                backgroundColor: '#22c55e',
-                                color: 'white',
-                                border: 'none',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer'
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {[...landmarks, { id: '__unassigned__', name: '未分组' } as any].map((lm: any) => {
+            const lmTasks = lm.id === '__unassigned__' ? tasks.filter(t => !t.landmarkId) : tasks.filter(t => t.landmarkId === lm.id)
+            const byStatus = statusOptions.map(status => ({ ...status, tasks: lmTasks.filter(t => t.status === status.value) }))
+            return (
+              <div key={lm.id}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{lm.name}</h2>
+                  <span style={{ color: '#6b7280', fontSize: 12 }}>共 {lmTasks.length} 个任务</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                  {byStatus.map((statusGroup) => (
+                    <div key={statusGroup.value} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: '1rem', border: '1px solid #e5e7eb' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', paddingBottom: '0.5rem', borderBottom: '2px solid #e5e7eb' }}>
+                        <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: statusGroup.color }} />
+                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
+                          {statusGroup.label} ({statusGroup.tasks.length})
+                        </h3>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {statusGroup.tasks.length === 0 ? (
+                          <div style={{ textAlign: 'center', color: '#9ca3af', padding: '0.75rem', fontStyle: 'italic' }}>暂无任务</div>
+                        ) : (
+                          statusGroup.tasks.map((task) => (
+                            <div
+                              key={task.id}
+                              style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: 6, padding: '1rem', boxShadow: '0 1px 2px rgba(0,0,0,.05)' }}
+                              onClick={() => {
+                                const next = expandedTaskId === task.id ? null : task.id
+                                setExpandedTaskId(next)
+                                if (next) fetchComments(task.id)
                               }}
                             >
-                              保存
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingTask(null)}
-                              style={{
-                                backgroundColor: '#f3f4f6',
-                                color: '#374151',
-                                border: 'none',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontSize: '0.8rem',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              取消
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <>
-                          {/* Row 1: buttons */}
-                          <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
-                            <div style={{ display: 'flex', gap: '0.5rem', whiteSpace: 'nowrap' }}>
-                              <button
-                                onClick={() => handleProcessTask(task)}
-                                style={{
-                                  backgroundColor: 'transparent',
-                                  color: '#16a34a',
-                                  border: 'none',
-                                  padding: '2px 6px',
-                                  borderRadius: '3px',
-                                  fontSize: '0.8rem',
-                                  cursor: 'pointer'
-                                }}
-                                title="交给 AI 处理"
-                              >
-                                AI处理
-                              </button>
-                              <button
-                                onClick={() => setEditingTask(task)}
-                                style={{
-                                  backgroundColor: 'transparent',
-                                  color: '#3b82f6',
-                                  border: 'none',
-                                  padding: '2px 6px',
-                                  borderRadius: '3px',
-                                  fontSize: '0.8rem',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                编辑
-                              </button>
-                              <button
-                                onClick={() => handleDeleteTask(task.id)}
-                                style={{
-                                  backgroundColor: 'transparent',
-                                  color: '#ef4444',
-                                  border: 'none',
-                                  padding: '2px 6px',
-                                  borderRadius: '3px',
-                                  fontSize: '0.8rem',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                删除
-                              </button>
-                            </div>
-                          </div>
-                          {/* Row 2: content */}
-                          <p style={{ margin: '0.5rem 0 0.5rem 0', lineHeight: '1.5', fontSize: '0.95rem' }}>
-                            {task.description}
-                          </p>
-                          <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontSize: '0.8rem',
-                            color: '#6b7280',
-                            marginTop: '0.25rem'
-                          }}>
-                            <span>创建于 {formatDate(task.createdAt)}</span>
-                          </div>
-                          {expandedTaskId === task.id && (
-                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
-                              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#111827' }}>评论</div>
-                              {commentsLoading[task.id] ? (
-                                <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>加载评论中...</div>
-                              ) : (comments[task.id] && comments[task.id].length > 0) ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                  {comments[task.id].map((c) => (
-                                    <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '0.5rem 0.75rem', backgroundColor: '#fafafa' }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ fontSize: '0.85rem', color: '#374151' }}>
-                                          <span style={{ fontWeight: 600 }}>{c.author}</span>
-                                          <span style={{ marginLeft: 8, color: '#6b7280' }}>{new Date(c.createdAt as any).toLocaleString()}</span>
-                                        </div>
-                                      </div>
-                                      <div style={{ marginTop: 6, fontSize: '0.9rem', color: '#111827', whiteSpace: 'pre-wrap' }}>
-                                        {c.summary}
-                                      </div>
-                                      <details style={{ marginTop: 6 }}>
-                                        <summary style={{ cursor: 'pointer', color: '#2563eb', fontSize: '0.85rem' }}>查看过程（原始事件/输出）</summary>
-                                        <pre style={{ marginTop: 6, overflow: 'auto', maxHeight: 240, fontSize: '0.75rem', backgroundColor: '#fff', padding: '0.5rem', border: '1px solid #eee', borderRadius: 4 }}>
-{JSON.stringify(c.content, null, 2)}
-                                        </pre>
-                                      </details>
-                                    </div>
-                                  ))}
-                                </div>
+                              {editingTask?.id === task.id ? (
+                                <form onSubmit={(e) => {
+                                  e.preventDefault()
+                                  const formData = new FormData(e.currentTarget)
+                                  handleUpdateTask(task.id, { description: formData.get('description') as string, status: formData.get('status') as string })
+                                }}>
+                                  <textarea name="description" defaultValue={task.description} style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: '.9rem', minHeight: 60, marginBottom: 8, boxSizing: 'border-box' }} required />
+                                  <select name="status" defaultValue={task.status} style={{ width: '100%', padding: '4px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: '.85rem', marginBottom: 8, boxSizing: 'border-box' }}>
+                                    {statusOptions.map(option => (
+                                      <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                  </select>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button type="submit" style={{ backgroundColor: '#22c55e', color: 'white', border: 'none', padding: '4px 8px', borderRadius: 4, fontSize: '.8rem', cursor: 'pointer' }}>保存</button>
+                                    <button type="button" onClick={() => setEditingTask(null)} style={{ backgroundColor: '#f3f4f6', color: '#374151', border: 'none', padding: '4px 8px', borderRadius: 4, fontSize: '.8rem', cursor: 'pointer' }}>取消</button>
+                                  </div>
+                                </form>
                               ) : (
-                                <div style={{ color: '#6b7280', fontStyle: 'italic' }}>暂无评论</div>
+                                <>
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+                                    <div style={{ display: 'flex', gap: 8, whiteSpace: 'nowrap' }}>
+                                      <button onClick={() => handleProcessTask(task)} style={{ background: 'transparent', color: '#16a34a', border: 'none', padding: '2px 6px', borderRadius: 3, fontSize: '.8rem', cursor: 'pointer' }} title="交给 AI 处理">AI处理</button>
+                                      <button onClick={() => setEditingTask(task)} style={{ background: 'transparent', color: '#3b82f6', border: 'none', padding: '2px 6px', borderRadius: 3, fontSize: '.8rem', cursor: 'pointer' }}>编辑</button>
+                                      <button onClick={() => handleDeleteTask(task.id)} style={{ background: 'transparent', color: '#ef4444', border: 'none', padding: '2px 6px', borderRadius: 3, fontSize: '.8rem', cursor: 'pointer' }}>删除</button>
+                                    </div>
+                                  </div>
+                                  <p style={{ margin: '0.5rem 0 0.5rem 0', lineHeight: 1.5, fontSize: '.95rem' }}>{task.description}</p>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.8rem', color: '#6b7280', marginTop: 4 }}>
+                                    <span>创建于 {formatDate(task.createdAt)}</span>
+                                  </div>
+                                  {expandedTaskId === task.id && (
+                                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                      <div style={{ fontWeight: 600, marginBottom: 8, color: '#111827' }}>评论</div>
+                                      {commentsLoading[task.id] ? (
+                                        <div style={{ color: '#6b7280', fontSize: '.9rem' }}>加载评论中...</div>
+                                      ) : (comments[task.id] && comments[task.id].length > 0) ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                          {comments[task.id].map((c) => (
+                                            <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '0.5rem 0.75rem', backgroundColor: '#fafafa' }}>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ fontSize: '.85rem', color: '#374151' }}>
+                                                  <span style={{ fontWeight: 600 }}>{c.author}</span>
+                                                  <span style={{ marginLeft: 8, color: '#6b7280' }}>{new Date(c.createdAt as any).toLocaleString()}</span>
+                                                </div>
+                                              </div>
+                                              <div style={{ marginTop: 6, fontSize: '.9rem', color: '#111827', whiteSpace: 'pre-wrap' }}>{c.summary}</div>
+                                              <details style={{ marginTop: 6 }}>
+                                                <summary style={{ cursor: 'pointer', color: '#2563eb', fontSize: '.85rem' }}>查看过程（原始事件/输出）</summary>
+                                                <pre style={{ marginTop: 6, overflow: 'auto', maxHeight: 240, fontSize: '.75rem', backgroundColor: '#fff', padding: '0.5rem', border: '1px solid #eee', borderRadius: 4 }}>
+{JSON.stringify(c.content, null, 2)}
+                                                </pre>
+                                              </details>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div style={{ color: '#6b7280', fontStyle: 'italic' }}>暂无评论</div>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
-                          )}
-                        </>
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

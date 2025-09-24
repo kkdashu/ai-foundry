@@ -18,6 +18,7 @@ export const NewProjectSchema = z.object({
 export const TaskSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
+  landmarkId: z.string().uuid().nullable().optional(),
   description: z.string(),
   status: z.string(),
   createdAt: z.coerce.date(),
@@ -28,6 +29,7 @@ export const NewTaskSchema = z.object({
   projectId: z.string().uuid(),
   description: z.string().min(1),
   status: z.string().optional(),
+  landmarkId: z.string().uuid().optional(),
 })
 
 export const CommentSchema = z.object({
@@ -41,10 +43,27 @@ export const CommentSchema = z.object({
 
 export const ApiErrorSchema = z.object({ error: z.string() })
 
+// Landmark
+export const LandmarkSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  name: z.string(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  completedAt: z.coerce.date().nullable().optional(),
+})
+
+export const NewLandmarkSchema = z.object({
+  projectId: z.string().uuid(),
+  name: z.string().min(1),
+  completedAt: z.coerce.date().optional(),
+})
+
 export type ProjectDto = z.infer<typeof ProjectSchema>
 export type NewProjectDto = z.infer<typeof NewProjectSchema>
 export type TaskDto = z.infer<typeof TaskSchema>
 export type NewTaskDto = z.infer<typeof NewTaskSchema>
 export type CommentDto = z.infer<typeof CommentSchema>
 export type ApiErrorDto = z.infer<typeof ApiErrorSchema>
-
+export type LandmarkDto = z.infer<typeof LandmarkSchema>
+export type NewLandmarkDto = z.infer<typeof NewLandmarkSchema>

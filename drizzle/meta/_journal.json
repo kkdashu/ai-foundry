@@ -8,6 +8,13 @@
       "when": 1758537850651,
       "tag": "0000_careless_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1758701152046,
+      "tag": "0001_massive_human_robot",
+      "breakpoints": true
     }
   ]
 }

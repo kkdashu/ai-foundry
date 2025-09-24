@@ -2,7 +2,7 @@ import { createTRPCRouter, publicProcedure } from '@/server/trpc'
 import { db, tasks, comments } from '@/lib/db'
 import { TaskSchema, NewTaskSchema } from '@/lib/api/schemas'
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { getLocalPath } from '@/lib/local/registry'
 import { query, type Options } from '@anthropic-ai/claude-code'
 import path from 'path'
@@ -46,10 +46,13 @@ function inputWithinCwd(input: any, cwd: string): { ok: boolean; reason?: string
 
 export const tasksRouter = createTRPCRouter({
   list: publicProcedure
-    .input(z.object({ projectId: z.string().uuid() }))
+    .input(z.object({ projectId: z.string().uuid(), landmarkId: z.string().uuid().optional() }))
     .output(z.array(TaskSchema))
     .query(async ({ input }) => {
-      const rows = await db.select().from(tasks).where(eq(tasks.projectId, input.projectId)).orderBy(tasks.createdAt)
+      const cond = input.landmarkId
+        ? and(eq(tasks.projectId, input.projectId), eq(tasks.landmarkId, input.landmarkId))
+        : eq(tasks.projectId, input.projectId)
+      const rows = await db.select().from(tasks).where(cond).orderBy(tasks.createdAt)
       return rows as any
     }),
 
@@ -61,6 +64,7 @@ export const tasksRouter = createTRPCRouter({
         projectId: input.projectId,
         description: input.description,
         status: input.status || 'pending',
+        landmarkId: (input as any).landmarkId ?? null,
       }).returning()
       return inserted[0] as any
     }),
@@ -161,4 +165,3 @@ export const tasksRouter = createTRPCRouter({
       return { ok: true, sessionId: currentSessionId ?? undefined, summary, usage: lastResult?.usage, totalCost: lastResult?.total_cost_usd }
     }),
 })
-
