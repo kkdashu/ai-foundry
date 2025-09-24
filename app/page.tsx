@@ -123,12 +123,6 @@ export default function HomePage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold text-foreground">项目管理</h1>
         <div className="flex gap-4">
-          <Button variant="outline" asChild>
-            <Link href="/chat">Chat</Link>
-          </Button>
-          <Button variant="secondary" asChild>
-            <a href="#ai-chat">AI Chat</a>
-          </Button>
           <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
             <DialogTrigger asChild>
               <Button>
@@ -242,7 +236,7 @@ export default function HomePage() {
                     variant="destructive"
                     size="icon"
                     className="h-8 w-8 shrink-0"
-                    onClick={(e) => handleDeleteProject(project, e)}
+                    onClick={(e) => handleDeleteProject(project as unknown as Project, e)}
                     aria-label={`删除 ${project.name}`}
                   >
                     <Trash2 className="h-4 w-4" />
