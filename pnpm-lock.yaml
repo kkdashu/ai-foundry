@@ -83,6 +83,9 @@ importers:
       ai:
         specifier: ^5.0.48
         version: 5.0.48(zod@4.1.11)
+      ai-sdk-provider-claude-code:
+        specifier: ^1.1.4
+        version: 1.1.4(zod@4.1.11)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -101,6 +104,9 @@ importers:
       lucide-react:
         specifier: ^0.544.0
         version: 0.544.0(react@19.1.1)
+      monaco-editor:
+        specifier: ^0.53.0
+        version: 0.53.0
       nanoid:
         specifier: ^5.1.5
         version: 5.1.5
@@ -116,6 +122,9 @@ importers:
       react-dom:
         specifier: ^19.1.1
         version: 19.1.1(react@19.1.1)
+      react-monaco-editor:
+        specifier: ^0.59.0
+        version: 0.59.0(monaco-editor@0.53.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react-syntax-highlighter:
         specifier: ^15.6.6
         version: 15.6.6(react@19.1.1)
@@ -198,6 +207,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4
 
+  '@ai-sdk/provider-utils@3.0.3':
+    resolution: {integrity: sha512-kAxIw1nYmFW1g5TvE54ZB3eNtgZna0RnLjPUp1ltz1+t9xkXJIuDT4atrwfau9IbS0BOef38wqrI8CjFfQrxhw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4
+
   '@ai-sdk/provider-utils@3.0.9':
     resolution: {integrity: sha512-Pm571x5efqaI4hf9yW4KsVlDBDme8++UepZRnq+kqVBWWjgvGhQlzU8glaFq0YJEB9kkxZHbRRyVeHoV2sRYaQ==}
     engines: {node: '>=18'}
@@ -230,6 +245,11 @@ packages:
 
   '@anthropic-ai/claude-code@1.0.119':
     resolution: {integrity: sha512-0SxTgt7Htr2okxL2Uk0Mv5eB8JxBrRCZCdtTNwuYC/OBl2F7UDM8YFtIwHz97ygCoJw49j7SL6s+/MIZGaEzrA==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
+  '@anthropic-ai/claude-code@1.0.94':
+    resolution: {integrity: sha512-RkiS860XpvCrh5RBE2lluMh2O+4uZgw07JKTnHwfeBDrOPxRbvNCrHCk1ZefCmAvYTjWV6GbuMN+hy5k7I3eVw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -1566,6 +1586,9 @@ packages:
   '@types/react@19.1.13':
     resolution: {integrity: sha512-hHkbU/eoO3EG5/MZkuFSKmYqPbSVk5byPFa3e7y/8TybHiLMACgI8seVYlicwk7H5K/rI2px9xrQp/C+AUDTiQ==}
 
+  '@types/trusted-types@1.0.6':
+    resolution: {integrity: sha512-230RC8sFeHoT6sSUlRO6a8cAnclO06eeiq1QDfiv2FGCLWFvvERWgwIQD4FWqD9A69BN7Lzee4OXwoMVnnsWDw==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
@@ -1582,6 +1605,12 @@ packages:
     resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  ai-sdk-provider-claude-code@1.1.4:
+    resolution: {integrity: sha512-nTduCaKHKbeI0kDvmJNzUEvkwRWr91E8WSqKqJLrgy3H58iK46Ccyor1HJn8pyPLkxfCT84v4UtudIwJkIDeRA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.0.0 || ^4.0.0
 
   ai@5.0.47:
     resolution: {integrity: sha512-/DKfU9tTsQVcUYSDCTu1L7jmvEgzUWOr1xf5UHwwDbRf/HED8LDb60QlWYs6f4BkZsVoLvpliCSjliXiRZywFQ==}
@@ -2198,6 +2227,9 @@ packages:
   json-schema@0.4.0:
     resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
 
+  jsonc-parser@3.3.1:
+    resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
+
   katex@0.16.22:
     resolution: {integrity: sha512-XCHRdUw4lf3SKBaJe4EvgqIuWwkPSo9XoeO8GjQW94Bp7TWv9hNhzZjZ+OH9yf1UmLygb7DIT5GSFQiyt16zYg==}
     hasBin: true
@@ -2470,6 +2502,9 @@ packages:
   mlly@1.8.0:
     resolution: {integrity: sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g==}
 
+  monaco-editor@0.53.0:
+    resolution: {integrity: sha512-0WNThgC6CMWNXXBxTbaYYcunj08iB5rnx4/G56UOPeL9UVIUGGHA1GR0EWIh9Ebabj7NpCRawQ5b0hfN1jQmYQ==}
+
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
@@ -2641,6 +2676,13 @@ packages:
     peerDependencies:
       '@types/react': '>=18'
       react: '>=18'
+
+  react-monaco-editor@0.59.0:
+    resolution: {integrity: sha512-SggqfZCdUauNk7GI0388bk5n25zYsQ1ai1i+VhxAgwbCH+MTGl7L1fBNTJ6V+oXeUApf+bpzikprHJEZm9J/zA==}
+    peerDependencies:
+      monaco-editor: ^0.52.0
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
 
   react-remove-scroll-bar@2.3.8:
     resolution: {integrity: sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==}
@@ -2972,6 +3014,11 @@ packages:
     resolution: {integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==}
     engines: {node: '>=18'}
 
+  zod-to-json-schema@3.24.6:
+    resolution: {integrity: sha512-h/z3PKvcTcTetyjl1fkj79MHNEjm+HpD6NXheWjzOekY7kV+lwDYnHw+ivHkijnCSMz1yJaWBD9vu/Fcmk+vEg==}
+    peerDependencies:
+      zod: ^3.24.1
+
   zod@4.1.11:
     resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
 
@@ -3004,6 +3051,14 @@ snapshots:
       '@ai-sdk/provider-utils': 3.0.9(zod@4.1.11)
       zod: 4.1.11
 
+  '@ai-sdk/provider-utils@3.0.3(zod@4.1.11)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@standard-schema/spec': 1.0.0
+      eventsource-parser: 3.0.6
+      zod: 4.1.11
+      zod-to-json-schema: 3.24.6(zod@4.1.11)
+
   '@ai-sdk/provider-utils@3.0.9(zod@4.1.11)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
@@ -3035,6 +3090,15 @@ snapshots:
   '@antfu/utils@9.2.1': {}
 
   '@anthropic-ai/claude-code@1.0.119':
+    optionalDependencies:
+      '@img/sharp-darwin-arm64': 0.33.5
+      '@img/sharp-darwin-x64': 0.33.5
+      '@img/sharp-linux-arm': 0.33.5
+      '@img/sharp-linux-arm64': 0.33.5
+      '@img/sharp-linux-x64': 0.33.5
+      '@img/sharp-win32-x64': 0.33.5
+
+  '@anthropic-ai/claude-code@1.0.94':
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.33.5
       '@img/sharp-darwin-x64': 0.33.5
@@ -4193,6 +4257,8 @@ snapshots:
     dependencies:
       csstype: 3.1.3
 
+  '@types/trusted-types@1.0.6': {}
+
   '@types/trusted-types@2.0.7':
     optional: true
 
@@ -4203,6 +4269,14 @@ snapshots:
   '@ungap/structured-clone@1.3.0': {}
 
   acorn@8.15.0: {}
+
+  ai-sdk-provider-claude-code@1.1.4(zod@4.1.11):
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.3(zod@4.1.11)
+      '@anthropic-ai/claude-code': 1.0.94
+      jsonc-parser: 3.3.1
+      zod: 4.1.11
 
   ai@5.0.47(zod@4.1.11):
     dependencies:
@@ -4844,6 +4918,8 @@ snapshots:
 
   json-schema@0.4.0: {}
 
+  jsonc-parser@3.3.1: {}
+
   katex@0.16.22:
     dependencies:
       commander: 8.3.0
@@ -5346,6 +5422,10 @@ snapshots:
       pkg-types: 1.3.1
       ufo: 1.6.1
 
+  monaco-editor@0.53.0:
+    dependencies:
+      '@types/trusted-types': 1.0.6
+
   ms@2.1.3: {}
 
   nanoid@3.3.11: {}
@@ -5533,6 +5613,12 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  react-monaco-editor@0.59.0(monaco-editor@0.53.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+    dependencies:
+      monaco-editor: 0.53.0
+      react: 19.1.1
+      react-dom: 19.1.1(react@19.1.1)
 
   react-remove-scroll-bar@2.3.8(@types/react@19.1.13)(react@19.1.1):
     dependencies:
@@ -5938,6 +6024,10 @@ snapshots:
   xtend@4.0.2: {}
 
   yallist@5.0.0: {}
+
+  zod-to-json-schema@3.24.6(zod@4.1.11):
+    dependencies:
+      zod: 4.1.11
 
   zod@4.1.11: {}
 

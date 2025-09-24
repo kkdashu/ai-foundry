@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import { Project, Task, NewTask, Comment, Landmark } from '../../../lib/types/api'
 import ChatBox from '@/components/chat-box'
 import { api } from '@/lib/trpc/client'
+import dynamic from 'next/dynamic'
+const DynamicFileExplorer = dynamic(() => import('@/components/file-explorer'), { ssr: false })
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -92,6 +94,7 @@ export default function ProjectDetailPage() {
   // Mutations for local path
   const setPathMutation = api.local.setPath.useMutation({ onSuccess: () => localPathQuery.refetch() })
   const removePathMutation = api.local.removePath.useMutation({ onSuccess: () => localPathQuery.refetch() })
+  const [showExplorer, setShowExplorer] = useState(false)
 
   const saveLocalPath = async () => {
     if (!localPath.trim()) {
@@ -298,6 +301,15 @@ export default function ProjectDetailPage() {
               </button>
               {localPath && (
                 <button
+                  onClick={() => setShowExplorer(true)}
+                  disabled={pathLoading}
+                  style={{ backgroundColor: '#111827', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  托管
+                </button>
+              )}
+              {localPath && (
+                <button
                   onClick={removeLocalBinding}
                   disabled={pathLoading}
                   style={{ backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}
@@ -314,6 +326,10 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
+        {showExplorer && (
+          // Lazy-load to keep page light if monaco is missing until needed
+          <DynamicFileExplorer projectId={project.id} onClose={() => setShowExplorer(false)} />
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => setShowCreateLandmarkForm(true)}

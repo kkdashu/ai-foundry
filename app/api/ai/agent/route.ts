@@ -71,6 +71,8 @@ export async function POST(req: Request) {
     const projectIdFromQuery = url.searchParams.get('projectId') || undefined
     const projectId = req.headers.get('x-project-id') || projectIdFromQuery || undefined
     const ccSessionFromHeader = req.headers.get('x-cc-session') || url.searchParams.get('ccSession') || undefined
+    const readonlyFlag = (req.headers.get('x-cc-readonly') || url.searchParams.get('readonly'))?.toString()
+    const readonly = readonlyFlag === '1' || readonlyFlag === 'true'
     const cwd = projectId ? await getLocalPath(projectId) : undefined
 
     // Debug logs
@@ -115,7 +117,9 @@ export async function POST(req: Request) {
         '- 创建项目：当用户请求时调用 createProject 工具（缺少描述可自动生成）。\n' +
         '- 列出项目：当用户请求查看项目、或删除时需要确认 ID，可调用 listProjects 工具（可按名称过滤，按创建时间排序）。\n' +
         '- 删除项目：当用户请求时调用 deleteProject 工具；如果按名称删除且匹配到多个同名项目，先展示候选项目的 ID/名称/创建时间，向用户确认具体要删除的 ID，再执行删除；不要在歧义情况下直接删除。\n' +
-        '- 当需要读取/修改代码、执行命令或进行复杂项目操作时，才调用 claudeCode 工具；否则直接回答。\n' +
+        (readonly
+          ? '- 只读模式：禁止对任何文件进行编辑/写入/重命名/删除等操作；允许读取文件与生成分析结果。\n'
+          : '- 当需要读取/修改代码、执行命令或进行复杂项目操作时，才调用 claudeCode 工具；否则直接回答。\n') +
         '- 调用工具前先规划步骤并简述意图，返回清晰结果与后续建议。' +
         (cwd
           ? `\n[项目上下文] 你正在本地项目目录下工作：${cwd}。所有文件和命令操作必须限定在此目录及其子目录内，使用相对路径优先。`
@@ -126,7 +130,12 @@ export async function POST(req: Request) {
       messages: convertToModelMessages(messages),
       // @ts-ignore
       tools: {
-        claudeCode: makeClaudeCodeTool({ cwd: cwd || undefined, defaultSessionId: ccSessionFromHeader || undefined, alwaysContinue: true }),
+        claudeCode: makeClaudeCodeTool({
+          cwd: cwd || undefined,
+          defaultSessionId: ccSessionFromHeader || undefined,
+          alwaysContinue: true,
+          ...(readonly ? { forcePermissionMode: 'plan' as const } : {}),
+        }),
         createProject: createProjectTool,
         deleteProject: deleteProjectTool,
         listProjects: listProjectsTool,

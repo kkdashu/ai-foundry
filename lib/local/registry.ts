@@ -108,13 +108,32 @@ function normalizePath(p: string) {
 }
 
 export async function validateDirectoryExists(dir: string): Promise<{ ok: boolean; reason?: string; path?: string }> {
+  // Behaves as "ensure directory": if the path doesn't exist, create it.
   try {
     const abs = normalizePath(dir)
-    const st = await fs.stat(abs)
-    if (!st.isDirectory()) {
-      return { ok: false, reason: 'Not a directory' }
+    // Try to stat first; if missing, create recursively
+    try {
+      const st = await fs.stat(abs)
+      if (!st.isDirectory()) {
+        return { ok: false, reason: 'Not a directory' }
+      }
+      return { ok: true, path: abs }
+    } catch (statErr: any) {
+      // ENOENT -> create the directory
+      if (statErr && (statErr.code === 'ENOENT' || /ENOENT/.test(String(statErr)))) {
+        try {
+          await ensureDirExists(abs)
+          const st2 = await fs.stat(abs)
+          if (!st2.isDirectory()) {
+            return { ok: false, reason: 'Not a directory' }
+          }
+          return { ok: true, path: abs }
+        } catch (mkErr: any) {
+          return { ok: false, reason: mkErr?.message || 'Failed to create directory' }
+        }
+      }
+      return { ok: false, reason: statErr?.message || 'Path not accessible' }
     }
-    return { ok: true, path: abs }
   } catch (err: any) {
     return { ok: false, reason: err?.message || 'Path not accessible' }
   }
@@ -146,4 +165,3 @@ export async function listAllLocal(): Promise<LocalProjectRecord[]> {
   const reg = await loadRegistry()
   return Object.values(reg.projects)
 }
-

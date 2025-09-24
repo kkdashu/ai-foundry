@@ -4,6 +4,7 @@ import { tasksRouter } from './tasks'
 import { commentsRouter } from './comments'
 import { localRouter } from './local'
 import { landmarksRouter } from './landmarks'
+import { fsRouter } from './fs'
 // import { aiRouter } from './ai'
 
 export const appRouter = createTRPCRouter({
@@ -12,6 +13,7 @@ export const appRouter = createTRPCRouter({
   comments: commentsRouter,
   local: localRouter,
   landmarks: landmarksRouter,
+  fs: fsRouter,
   // ai: aiRouter,
 })
 

@@ -37,9 +37,15 @@ type ChatBoxProps = {
   title?: string
   className?: string
   projectId?: string
+  // If provided, send this as the first message once, on mount
+  initialPrompt?: string
+  // Readonly mode: pass a header to server to force Claude Code plan-only mode
+  readonly?: boolean
+  // Override API endpoint (defaults to /api/ai/agent)
+  apiPath?: string
 }
 
-export function ChatBox({ variant = 'floating', title = 'AI 助手', className, projectId }: ChatBoxProps) {
+export function ChatBox({ variant = 'floating', title = 'AI 助手', className, projectId, initialPrompt, readonly, apiPath }: ChatBoxProps) {
   const [open, setOpen] = useState(variant === 'embedded')
   const [localInput, setLocalInput] = useState('')
   const inputRefObj = useRef<HTMLTextAreaElement | null>(null)
@@ -68,10 +74,10 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: projectId
-        ? `/api/ai/agent?projectId=${encodeURIComponent(projectId)}${ccSession ? `&ccSession=${encodeURIComponent(ccSession)}` : ''}`
-        : '/api/ai/agent',
+        ? `${apiPath || '/api/ai/agent'}?projectId=${encodeURIComponent(projectId)}${ccSession ? `&ccSession=${encodeURIComponent(ccSession)}` : ''}${readonly ? '&readonly=1' : ''}`
+        : (apiPath || '/api/ai/agent'),
       headers: projectId
-        ? { 'X-Project-Id': projectId, ...(ccSession ? { 'X-CC-Session': ccSession } : {}) }
+        ? { 'X-Project-Id': projectId, ...(ccSession ? { 'X-CC-Session': ccSession } : {}), ...(readonly ? { 'X-CC-Readonly': '1' } : {}) }
         : undefined,
     })
   })
@@ -90,6 +96,23 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
       setTimeout(() => inputRefObj.current?.focus?.(), 0)
     }
   }, [status])
+  // Send initial prompt automatically once if provided
+  const initialSentRef = useRef(false)
+  useEffect(() => {
+    if (initialSentRef.current) return
+    if (!initialPrompt) return
+    // Only after transport is ready and there is no message yet
+    if (status !== 'ready') return
+    if (messages.length > 0) return
+    initialSentRef.current = true
+    ;(async () => {
+      try {
+        await sendMessage({ role: 'user', parts: [{ type: 'text', text: initialPrompt }] as any })
+      } catch (err) {
+        console.error('Failed to send initial prompt:', err)
+      }
+    })()
+  }, [initialPrompt, messages.length, status])
   useEffect(() => {
     setTimeout(() => inputRefObj.current?.focus?.(), 0)
   }, [open, resetKey])
@@ -329,7 +352,14 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
     >
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{title}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg">{title}</CardTitle>
+            {readonly && (
+              <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none bg-muted text-muted-foreground">
+                只读模式
+              </span>
+            )}
+          </div>
           {variant === 'floating' && (
             <Button
               variant="ghost"
@@ -344,6 +374,9 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
         </div>
         <CardDescription>
           支持文本与图片消息
+          {readonly && (
+            <span className="block mt-1 text-xs text-muted-foreground">只读模式：禁止对文件进行编辑、写入、重命名、删除</span>
+          )}
           {projectId && (
             <span className="block mt-1 text-xs text-muted-foreground">
               {boundLoading ? '正在检查本地目录…' : boundPath ? `基于：${boundPath}` : '未绑定本地目录（请在页面上方绑定）'}

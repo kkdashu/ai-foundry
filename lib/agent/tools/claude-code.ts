@@ -4,7 +4,13 @@ import { z } from 'zod'
 import { query, type Options } from '@anthropic-ai/claude-code'
 import path from 'path'
 
-type ToolOpts = { cwd?: string; defaultSessionId?: string; alwaysContinue?: boolean }
+type ToolOpts = {
+  cwd?: string
+  defaultSessionId?: string
+  alwaysContinue?: boolean
+  // Force a specific permission mode regardless of tool input/env
+  forcePermissionMode?: 'bypassPermissions' | 'default' | 'acceptEdits' | 'plan'
+}
 
 function isPathLike(str: string) {
   if (typeof str !== 'string') return false
@@ -85,7 +91,7 @@ export const makeClaudeCodeTool = (opts?: ToolOpts) => createTool({
       | 'plan'
       | undefined
     const effectiveMode: 'bypassPermissions' | 'default' | 'acceptEdits' | 'plan' =
-      envMode ?? (!permissionMode || permissionMode === 'default' ? 'bypassPermissions' : permissionMode)
+      opts?.forcePermissionMode ?? (envMode ?? (!permissionMode || permissionMode === 'default' ? 'bypassPermissions' : permissionMode))
       const head = (s: string, n = 400) => (s && s.length > n ? s.slice(0, n) + '…' : s)
       console.log('[claudeCode] Execute', {
         cwd: opts?.cwd,
