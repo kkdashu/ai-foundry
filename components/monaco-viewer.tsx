@@ -1,5 +1,6 @@
 "use client"
 
+import '@/lib/monaco-setup'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
@@ -10,7 +11,8 @@ function guessLanguage(filePath: string): string | undefined {
   const ext = (m?.[1] || '').toLowerCase()
   const map: Record<string, string> = {
     js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
-    ts: 'typescript', tsx: 'typescript',
+    // Use javascript tokenization for TS/TSX to avoid requiring TS workers
+    ts: 'javascript', tsx: 'javascript',
     json: 'json',
     md: 'markdown', markdown: 'markdown',
     css: 'css', scss: 'scss', less: 'less',
@@ -49,4 +51,3 @@ export function MonacoViewer(props: { path: string; content: string; height?: nu
 }
 
 export default MonacoViewer
-
