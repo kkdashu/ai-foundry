@@ -1,19 +1,67 @@
 import '@/lib/undici-proxy'
 import { google } from '@ai-sdk/google'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { streamText, type UIMessage, convertToModelMessages, stepCountIs } from 'ai'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { makeClaudeCodeTool } from '@/lib/agent/tools/claude-code'
 import { getLocalPath } from '@/lib/local/registry'
 import { createProjectTool, deleteProjectTool, listProjectsTool } from '@/lib/agent/tools/projects'
 
 export const maxDuration = 60
 
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    try {
+      if (value && typeof (value as any).forEach === 'function') {
+        const obj: Record<string, any> = {}
+        ;(value as any).forEach((v: any, k: string) => (obj[k] = v))
+        return JSON.stringify(obj, null, 2)
+      }
+    } catch {}
+    return String(value)
+  }
+}
+
 export async function POST(req: Request) {
   try {
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'Missing GOOGLE_GENERATIVE_AI_API_KEY' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      )
+    const provider = (process.env.AI_AGENT_PROVIDER || 'google').toLowerCase()
+    const modelId =
+      process.env.AI_AGENT_MODEL ||
+      (provider === 'google'
+        ? 'gemini-2.5-flash'
+        : provider === 'openrouter'
+        ? 'openai/gpt-4o-mini'
+        : 'gpt-4o-mini')
+
+    // Basic env validation per provider
+    if (provider === 'google') {
+      console.log('use google provider');
+      if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: 'Missing GOOGLE_GENERATIVE_AI_API_KEY' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+    } else if (provider === 'openai-compatible') {
+      console.log('use openai-compatible provider');
+      // baseURL is needed for most OpenAI-compatible providers
+      if (!process.env.OPENAI_COMPATIBLE_BASE_URL) {
+        return new Response(
+          JSON.stringify({ error: 'Missing OPENAI_COMPATIBLE_BASE_URL' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      // apiKey is optional for some local providers (e.g., LM Studio), so we don't hard-require it
+    } else if (provider === 'openrouter') {
+      console.log('use openrouter provider');
+      if (!process.env.OPENROUTER_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: 'Missing OPENROUTER_API_KEY' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     const { messages }: { messages: UIMessage[] } = await req.json()
@@ -36,8 +84,32 @@ export async function POST(req: Request) {
       messages: messagesPreview,
     })
 
+    // Resolve model by provider
+    const model = (() => {
+      if (provider === 'google') {
+        return google(modelId)
+      }
+      if (provider === 'openai-compatible') {
+        const oc = createOpenAICompatible({
+          name: 'models/gemini-2.5-pro', //process.env.OPENAI_COMPATIBLE_PROVIDER_NAME || 'custom',
+          apiKey: process.env.OPENAI_COMPATIBLE_API_KEY,
+          baseURL: process.env.OPENAI_COMPATIBLE_BASE_URL || '',
+          includeUsage: true,
+        })
+        return oc.completionModel(modelId)
+      }
+      if (provider === 'openrouter') {
+        const openrouter = createOpenRouter({
+          apiKey: process.env.OPENROUTER_API_KEY!,
+        })
+        return openrouter.chat(modelId)
+      }
+      // Fallback to google if unknown value provided
+      return google(modelId)
+    })()
+
     const result = streamText<any>({
-      model: google('gemini-2.5-flash'),
+      model,
       system:
         '你是一个多步智能体（Agent）。\n' +
         '- 创建项目：当用户请求时调用 createProject 工具（缺少描述可自动生成）。\n' +
@@ -71,11 +143,20 @@ export async function POST(req: Request) {
       name: err?.name,
       message: err?.message ?? 'Unknown error',
       code: err?.code,
-      status: err?.status,
+      status: err?.status ?? err?.statusCode,
       cause: err?.cause ? String(err.cause) : undefined,
+      url: err?.url,
+      statusCode: err?.statusCode,
+      responseBody: err?.responseBody,
+      responseHeaders: err?.responseHeaders,
+      data: err?.data,
       stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
     }
     console.error('Agent error:', payload)
+    if (err?.responseHeaders || err?.data) {
+      console.error('[agent] Upstream responseHeaders:', safeJson(err?.responseHeaders))
+      console.error('[agent] Upstream data:', safeJson(err?.data))
+    }
     return new Response(JSON.stringify(payload), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

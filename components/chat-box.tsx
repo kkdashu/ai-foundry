@@ -235,12 +235,14 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
   }, [previewSrc])
 
   const handleDragEnter: React.DragEventHandler<HTMLDivElement> = (e) => {
+    if (isLoading) return
     if (e.dataTransfer?.types?.includes('Files')) {
       dragCounter.current += 1
       setDragActive(true)
     }
   }
   const handleDragOver: React.DragEventHandler<HTMLDivElement> = (e) => {
+    if (isLoading) return
     if (e.dataTransfer?.types?.includes('Files')) {
       setDragActive(true)
     }
@@ -250,6 +252,7 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
     if (dragCounter.current === 0) setDragActive(false)
   }
   const handleDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
+    if (isLoading) return
     dragCounter.current = 0
     setDragActive(false)
     // do not preventDefault here; underlying form handles drop
@@ -286,6 +289,10 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
     message: { text?: string; files?: any[] },
     _event: React.FormEvent<HTMLFormElement>
   ) => {
+    if (isLoading) {
+      showToast('AI 正在回复，请稍候再发送')
+      return
+    }
     if (projectId && !boundPath) {
       showToast('未绑定本地目录，请先在页面上方绑定后再试')
       return
@@ -426,7 +433,7 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
             </PromptInputAttachments>
             <div className="flex items-center gap-2">
               <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger />
+                <PromptInputActionMenuTrigger disabled={isLoading} />
                 <PromptInputActionMenuContent>
                   <PromptInputActionAddAttachments />
                 </PromptInputActionMenuContent>
@@ -437,8 +444,9 @@ export function ChatBox({ variant = 'floating', title = 'AI 助手', className, 
                 placeholder="输入消息..."
                 value={localInput}
                 onChange={(e) => setLocalInput(e.target.value)}
+                disabled={isLoading}
               />
-              <PromptInputSubmit status={status} />
+              <PromptInputSubmit status={status} disabled={isLoading} />
             </div>
           </PromptInput>
         </div>
