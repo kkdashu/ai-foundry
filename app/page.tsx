@@ -119,7 +119,7 @@ export default function HomePage() {
 
 
   return (
-    <div className="container mx-auto max-w-6xl p-4">
+    <div className="w-full px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold text-foreground">项目管理</h1>
         <div className="flex gap-4">

@@ -240,7 +240,7 @@ export default function ProjectDetailPage() {
 
   return (
     <>
-    <div className="container mx-auto max-w-6xl p-4">
+    <div className="w-full px-4 sm:px-6 lg:px-8">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
