@@ -50,6 +50,19 @@ async function hasChildren(dir: string): Promise<boolean> {
 }
 
 export const fsRouter = createTRPCRouter({
+  ensureDir: publicProcedure
+    .input(z.object({ projectId: z.string().uuid(), rel: z.string().min(1) }))
+    .output(z.object({ ok: z.literal(true), rel: z.string() }))
+    .mutation(async ({ input }) => {
+      const baseReal = await getBoundBase(input.projectId)
+      const rel = input.rel.replace(/\\/g, '/').replace(/^\/+/, '')
+      const targetAbs = path.resolve(baseReal, rel)
+      await ensureInside(baseReal, targetAbs)
+      await fs.mkdir(targetAbs, { recursive: true }).catch((err) => {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to create directory: ${err?.message || 'unknown'}` })
+      })
+      return { ok: true as const, rel }
+    }),
   list: publicProcedure
     .input(z.object({ projectId: z.string().uuid(), rel: z.string().optional().default('') }))
     .output(z.object({

@@ -6,7 +6,9 @@ import { Project, Task, NewTask, Comment, Landmark } from '../../../lib/types/ap
 import ChatBox from '@/components/chat-box'
 import { api } from '@/lib/trpc/client'
 import dynamic from 'next/dynamic'
+import { FolderOpen } from 'lucide-react'
 const DynamicFileExplorer = dynamic(() => import('@/components/file-explorer'), { ssr: false })
+const DynamicTaskFlow = dynamic(() => import('@/components/task-flow'), { ssr: false })
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -30,6 +32,7 @@ export default function ProjectDetailPage() {
     description: '',
     status: 'pending'
   })
+  const [createForLandmarkId, setCreateForLandmarkId] = useState<string | null>(null)
 
   // Local path binding state
   const [localPath, setLocalPath] = useState<string>('')
@@ -95,6 +98,8 @@ export default function ProjectDetailPage() {
   const setPathMutation = api.local.setPath.useMutation({ onSuccess: () => localPathQuery.refetch() })
   const removePathMutation = api.local.removePath.useMutation({ onSuccess: () => localPathQuery.refetch() })
   const [showExplorer, setShowExplorer] = useState(false)
+  const [lmExplorerId, setLmExplorerId] = useState<string | null>(null)
+  const ensureDirMutation = api.fs.ensureDir.useMutation()
 
   const saveLocalPath = async () => {
     if (!localPath.trim()) {
@@ -138,8 +143,15 @@ export default function ProjectDetailPage() {
 
     try {
       setIsCreating(true)
-      await createTaskMutation.mutateAsync(newTask as any)
+      const payload = {
+        projectId,
+        description: newTask.description.trim(),
+        status: newTask.status || 'pending',
+        landmarkId: (newTask as any).landmarkId || undefined,
+      }
+      await createTaskMutation.mutateAsync(payload as any)
       setNewTask({ projectId: projectId, description: '', status: 'pending' })
+      setCreateForLandmarkId(null)
       setShowCreateForm(false)
     } catch (error) {
       console.error('Error creating task:', error)
@@ -208,10 +220,15 @@ export default function ProjectDetailPage() {
     return statusOptions.find(option => option.value === status) || statusOptions[0]
   }
 
-  const tasksByStatus = statusOptions.map(status => ({
-    ...status,
-    tasks: tasks.filter(task => task.status === status.value)
-  }))
+  const selectedTask = tasks.find(t => t.id === expandedTaskId) || null
+  const [modalDesc, setModalDesc] = useState<string>('')
+  const [modalStatus, setModalStatus] = useState<string>('pending')
+  useEffect(() => {
+    if (selectedTask) {
+      setModalDesc(selectedTask.description)
+      setModalStatus(selectedTask.status)
+    }
+  }, [selectedTask?.id])
 
   // Landmarks mutations
   const createLandmarkMutation = api.landmarks.create.useMutation({ onSuccess: () => landmarksQuery.refetch() })
@@ -330,6 +347,9 @@ export default function ProjectDetailPage() {
           // Lazy-load to keep page light if monaco is missing until needed
           <DynamicFileExplorer projectId={project.id} onClose={() => setShowExplorer(false)} />
         )}
+        {lmExplorerId && (
+          <DynamicFileExplorer projectId={project.id} baseRel={`.project/${lmExplorerId}`} onClose={() => setLmExplorerId(null)} />
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => setShowCreateLandmarkForm(true)}
@@ -349,7 +369,7 @@ export default function ProjectDetailPage() {
             + 新建里程碑
           </button>
           <button
-            onClick={() => setShowCreateForm(true)}
+            onClick={() => { setCreateForLandmarkId(null); setNewTask(prev => ({ ...prev, landmarkId: undefined } as any)); setShowCreateForm(true) }}
             style={{
               backgroundColor: '#22c55e',
               color: 'white',
@@ -526,112 +546,139 @@ export default function ProjectDetailPage() {
           <div style={{ fontSize: '1.1rem', color: '#666' }}>加载任务中...</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {[...landmarks, { id: '__unassigned__', name: '未分组' } as any].map((lm: any) => {
-            const lmTasks = lm.id === '__unassigned__' ? tasks.filter(t => !t.landmarkId) : tasks.filter(t => t.landmarkId === lm.id)
-            const byStatus = statusOptions.map(status => ({ ...status, tasks: lmTasks.filter(t => t.status === status.value) }))
-            return (
-              <div key={lm.id}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{lm.name}</h2>
-                  <span style={{ color: '#6b7280', fontSize: 12 }}>共 {lmTasks.length} 个任务</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-                  {byStatus.map((statusGroup) => (
-                    <div key={statusGroup.value} style={{ backgroundColor: '#f9fafb', borderRadius: 8, padding: '1rem', border: '1px solid #e5e7eb' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', paddingBottom: '0.5rem', borderBottom: '2px solid #e5e7eb' }}>
-                        <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: statusGroup.color }} />
-                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
-                          {statusGroup.label} ({statusGroup.tasks.length})
-                        </h3>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {statusGroup.tasks.length === 0 ? (
-                          <div style={{ textAlign: 'center', color: '#9ca3af', padding: '0.75rem', fontStyle: 'italic' }}>暂无任务</div>
-                        ) : (
-                          statusGroup.tasks.map((task) => (
-                            <div
-                              key={task.id}
-                              style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: 6, padding: '1rem', boxShadow: '0 1px 2px rgba(0,0,0,.05)' }}
-                              onClick={() => {
-                                const next = expandedTaskId === task.id ? null : task.id
-                                setExpandedTaskId(next)
-                                if (next) fetchComments(task.id)
-                              }}
-                            >
-                              {editingTask?.id === task.id ? (
-                                <form onSubmit={(e) => {
-                                  e.preventDefault()
-                                  const formData = new FormData(e.currentTarget)
-                                  handleUpdateTask(task.id, { description: formData.get('description') as string, status: formData.get('status') as string })
-                                }}>
-                                  <textarea name="description" defaultValue={task.description} style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 4, fontSize: '.9rem', minHeight: 60, marginBottom: 8, boxSizing: 'border-box' }} required />
-                                  <select name="status" defaultValue={task.status} style={{ width: '100%', padding: '4px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: '.85rem', marginBottom: 8, boxSizing: 'border-box' }}>
-                                    {statusOptions.map(option => (
-                                      <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                  </select>
-                                  <div style={{ display: 'flex', gap: 8 }}>
-                                    <button type="submit" style={{ backgroundColor: '#22c55e', color: 'white', border: 'none', padding: '4px 8px', borderRadius: 4, fontSize: '.8rem', cursor: 'pointer' }}>保存</button>
-                                    <button type="button" onClick={() => setEditingTask(null)} style={{ backgroundColor: '#f3f4f6', color: '#374151', border: 'none', padding: '4px 8px', borderRadius: 4, fontSize: '.8rem', cursor: 'pointer' }}>取消</button>
-                                  </div>
-                                </form>
-                              ) : (
-                                <>
-                                  <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
-                                    <div style={{ display: 'flex', gap: 8, whiteSpace: 'nowrap' }}>
-                                      <button onClick={() => handleProcessTask(task)} style={{ background: 'transparent', color: '#16a34a', border: 'none', padding: '2px 6px', borderRadius: 3, fontSize: '.8rem', cursor: 'pointer' }} title="交给 AI 处理">AI处理</button>
-                                      <button onClick={() => setEditingTask(task)} style={{ background: 'transparent', color: '#3b82f6', border: 'none', padding: '2px 6px', borderRadius: 3, fontSize: '.8rem', cursor: 'pointer' }}>编辑</button>
-                                      <button onClick={() => handleDeleteTask(task.id)} style={{ background: 'transparent', color: '#ef4444', border: 'none', padding: '2px 6px', borderRadius: 3, fontSize: '.8rem', cursor: 'pointer' }}>删除</button>
-                                    </div>
-                                  </div>
-                                  <p style={{ margin: '0.5rem 0 0.5rem 0', lineHeight: 1.5, fontSize: '.95rem' }}>{task.description}</p>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.8rem', color: '#6b7280', marginTop: 4 }}>
-                                    <span>创建于 {formatDate(task.createdAt)}</span>
-                                  </div>
-                                  {expandedTaskId === task.id && (
-                                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
-                                      <div style={{ fontWeight: 600, marginBottom: 8, color: '#111827' }}>评论</div>
-                                      {commentsLoading[task.id] ? (
-                                        <div style={{ color: '#6b7280', fontSize: '.9rem' }}>加载评论中...</div>
-                                      ) : (comments[task.id] && comments[task.id].length > 0) ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                          {comments[task.id].map((c) => (
-                                            <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '0.5rem 0.75rem', backgroundColor: '#fafafa' }}>
-                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div style={{ fontSize: '.85rem', color: '#374151' }}>
-                                                  <span style={{ fontWeight: 600 }}>{c.author}</span>
-                                                  <span style={{ marginLeft: 8, color: '#6b7280' }}>{new Date(c.createdAt as any).toLocaleString()}</span>
-                                                </div>
-                                              </div>
-                                              <div style={{ marginTop: 6, fontSize: '.9rem', color: '#111827', whiteSpace: 'pre-wrap' }}>{c.summary}</div>
-                                              <details style={{ marginTop: 6 }}>
-                                                <summary style={{ cursor: 'pointer', color: '#2563eb', fontSize: '.85rem' }}>查看过程（原始事件/输出）</summary>
-                                                <pre style={{ marginTop: 6, overflow: 'auto', maxHeight: 240, fontSize: '.75rem', backgroundColor: '#fff', padding: '0.5rem', border: '1px solid #eee', borderRadius: 4 }}>
-{JSON.stringify(c.content, null, 2)}
-                                                </pre>
-                                              </details>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <div style={{ color: '#6b7280', fontStyle: 'italic' }}>暂无评论</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          ))
-                        )}
-                      </div>
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginTop: 16 }}>
+            {[...landmarks, { id: '__unassigned__', name: '未分组' } as any].map((lm: any) => {
+              const lmTasks = lm.id === '__unassigned__' ? tasks.filter(t => !t.landmarkId) : tasks.filter(t => t.landmarkId === lm.id)
+              return (
+                <div key={lm.id}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{lm.name}</h2>
+                      <button
+                        onClick={() => { const lid = lm.id === '__unassigned__' ? undefined : lm.id; setCreateForLandmarkId(lid ?? null); setNewTask(prev => ({ ...prev, landmarkId: lid } as any)); setShowCreateForm(true) }}
+                        style={{ background: '#22c55e', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}
+                        title="在该里程碑下新建任务"
+                      >
+                        + 任务
+                      </button>
+                      {lm.id !== '__unassigned__' && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await ensureDirMutation.mutateAsync({ projectId, rel: `.project/${lm.id}` })
+                              setLmExplorerId(lm.id)
+                            } catch (err: any) {
+                              alert(`无法创建/打开目录：${err?.message || '未知错误'}`)
+                            }
+                          }}
+                          style={{ background: '#111827', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                          title="查看该里程碑的本地目录"
+                        >
+                          <FolderOpen size={14} />
+                          目录
+                        </button>
+                      )}
                     </div>
-                  ))}
+                    <span style={{ color: '#6b7280', fontSize: 12 }}>共 {lmTasks.length} 个任务</span>
+                  </div>
+                  <DynamicTaskFlow
+                    tasks={lmTasks}
+                    height="50vh"
+                    onSelect={(id) => {
+                      setExpandedTaskId(prev => prev === id ? null : (id || null))
+                      if (id && !comments[id]) fetchComments(id)
+                    }}
+                    layoutKey={`${projectId}:${lm.id}`}
+                    onConnectEdge={async (sourceId, targetId) => {
+                      // 将 target 的前置任务设置为 source
+                      try {
+                        await updateTaskMutation.mutateAsync({ id: targetId, predecessorId: sourceId } as any)
+                        await utils.tasks.list.invalidate({ projectId })
+                      } catch (err) {
+                        console.error('Update predecessor failed', err)
+                        throw err
+                      }
+                    }}
+                    onDeleteEdge={async (sourceId, targetId) => {
+                      try {
+                        // 清除目标任务的前置任务
+                        await updateTaskMutation.mutateAsync({ id: targetId, predecessorId: null } as any)
+                        await utils.tasks.list.invalidate({ projectId })
+                      } catch (err) {
+                        console.error('Clear predecessor failed', err)
+                        throw err
+                      }
+                    }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+
+          {selectedTask && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={() => setExpandedTaskId(null)}>
+              <div style={{ background: '#fff', width: 'min(800px, 96vw)', maxHeight: '85vh', overflow: 'auto', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,.25)' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: '#111827' }}>任务详情</div>
+                    <div style={{ color: '#6b7280', fontSize: 12 }}>创建于 {formatDate(selectedTask.createdAt)}</div>
+                  </div>
+                  <button onClick={() => setExpandedTaskId(null)} style={{ background: 'transparent', border: 'none', fontSize: 20, lineHeight: 1, cursor: 'pointer', color: '#6b7280' }}>×</button>
+                </div>
+                <div style={{ padding: 16 }}>
+                  <form onSubmit={async (e) => { e.preventDefault(); await handleUpdateTask(selectedTask.id, { description: modalDesc, status: modalStatus } as any); setExpandedTaskId(null) }}>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>描述</label>
+                      <textarea value={modalDesc} onChange={(e) => setModalDesc(e.target.value)} style={{ width: '100%', minHeight: 120, padding: 8, border: '1px solid #ddd', borderRadius: 6, boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>状态</label>
+                      <select value={modalStatus} onChange={(e) => setModalStatus(e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 6 }}>
+                        {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={() => handleProcessTask(selectedTask)} style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>AI处理</button>
+                      <button type="button" onClick={() => { handleDeleteTask(selectedTask.id); setExpandedTaskId(null) }} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>删除</button>
+                      <button type="button" onClick={() => setExpandedTaskId(null)} style={{ background: '#f3f4f6', color: '#374151', border: '1px solid #ddd', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>取消</button>
+                      <button type="submit" style={{ background: '#111827', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>保存</button>
+                    </div>
+                  </form>
+
+                  <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #eee' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8, color: '#111827' }}>评论</div>
+                    {commentsLoading[selectedTask.id] ? (
+                      <div style={{ color: '#6b7280', fontSize: '.9rem' }}>加载评论中...</div>
+                    ) : (comments[selectedTask.id] && comments[selectedTask.id].length > 0) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {comments[selectedTask.id].map((c) => (
+                          <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: '0.5rem 0.75rem', backgroundColor: '#fafafa' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ fontSize: '.85rem', color: '#374151' }}>
+                                <span style={{ fontWeight: 600 }}>{c.author}</span>
+                                <span style={{ marginLeft: 8, color: '#6b7280' }}>{new Date(c.createdAt as any).toLocaleString()}</span>
+                              </div>
+                            </div>
+                            <div style={{ marginTop: 6, fontSize: '.9rem', color: '#111827', whiteSpace: 'pre-wrap' }}>{c.summary}</div>
+                            <details style={{ marginTop: 6 }}>
+                              <summary style={{ cursor: 'pointer', color: '#2563eb', fontSize: '.85rem' }}>查看过程（原始事件/输出）</summary>
+                              <pre style={{ marginTop: 6, overflow: 'auto', maxHeight: 240, fontSize: '.75rem', backgroundColor: '#fff', padding: '0.5rem', border: '1px solid #eee', borderRadius: 4 }}>
+{JSON.stringify(c.content, null, 2)}
+                              </pre>
+                            </details>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ color: '#6b7280', fontStyle: 'italic' }}>暂无评论</div>
+                    )}
+                  </div>
                 </div>
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
     {/* Scoped AI Chat for this project (passes projectId via header) */}

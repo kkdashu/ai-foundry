@@ -270,7 +270,7 @@ function isImagePath(rel: string | null): boolean {
   return ['png','jpg','jpeg','gif','webp','svg','bmp','ico','tif','tiff','avif','heic','heif','jfif'].includes(ext)
 }
 
-export default function FileExplorerModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+export default function FileExplorerModal({ projectId, onClose, baseRel }: { projectId: string; onClose: () => void; baseRel?: string }) {
   const [selectedRel, setSelectedRel] = React.useState<string | null>(null)
   const isImage = isImagePath(selectedRel)
   const readTextQuery = api.fs.read.useQuery({ projectId, rel: selectedRel || '' }, { enabled: !!selectedRel && !isImage })
@@ -284,6 +284,9 @@ export default function FileExplorerModal({ projectId, onClose }: { projectId: s
     return `请在工作目录 ${cwd || '(未绑定路径)'} 下分析文件 ${selectedRel}。请只读分析，必要时读取该文件与其直接依赖，不要修改任何文件。`
   }, [cwd, selectedRel])
 
+  const rootRel = (baseRel || '').replace(/\\/g, '/').replace(/^\/+/, '')
+  const rootLabel = rootRel ? rootRel : '根目录'
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: 'white', width: '90vw', height: '85vh', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
@@ -293,7 +296,7 @@ export default function FileExplorerModal({ projectId, onClose }: { projectId: s
         </div>
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           <div style={{ width: 320, minWidth: 220, maxWidth: 480, overflow: 'auto', borderRight: '1px solid #e5e7eb', padding: '6px 0' }}>
-            <DirectoryNode key={reloadKey} projectId={projectId} rel="" level={0} onSelect={(r) => setSelectedRel(r)} onTreeChanged={() => setReloadKey((k) => k + 1)} selectedRel={selectedRel} />
+            <DirectoryNode key={reloadKey} projectId={projectId} rel={rootRel} name={rootLabel} level={0} onSelect={(r) => setSelectedRel(r)} onTreeChanged={() => setReloadKey((k) => k + 1)} selectedRel={selectedRel} />
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             <div style={{ padding: '6px 10px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 8 }}>

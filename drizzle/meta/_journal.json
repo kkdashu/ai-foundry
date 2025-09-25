@@ -15,6 +15,13 @@
       "when": 1758701152046,
       "tag": "0001_massive_human_robot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1758772679302,
+      "tag": "0002_easy_terror",
+      "breakpoints": true
     }
   ]
 }

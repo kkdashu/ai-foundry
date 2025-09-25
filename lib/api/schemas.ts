@@ -19,6 +19,7 @@ export const TaskSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
   landmarkId: z.string().uuid().nullable().optional(),
+  predecessorId: z.string().uuid().nullable().optional(),
   description: z.string(),
   status: z.string(),
   createdAt: z.coerce.date(),
@@ -30,6 +31,7 @@ export const NewTaskSchema = z.object({
   description: z.string().min(1),
   status: z.string().optional(),
   landmarkId: z.string().uuid().optional(),
+  predecessorId: z.string().uuid().optional(),
 })
 
 export const CommentSchema = z.object({

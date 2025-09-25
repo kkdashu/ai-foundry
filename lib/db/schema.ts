@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, text, timestamp, jsonb, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 export const projects = pgTable('projects', {
@@ -23,6 +23,8 @@ export const tasks = pgTable('tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
   projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   landmarkId: uuid('landmark_id').references(() => landmarks.id, { onDelete: 'set null' }),
+  // 前置任务：同表自引用，可为 null
+  predecessorId: uuid('predecessor_id').references(((): AnyPgColumn => tasks.id), { onDelete: 'set null' }),
   description: text('description').notNull(),
   status: varchar('status', { length: 50 }).notNull().default('pending'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -52,6 +54,13 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
     fields: [tasks.landmarkId],
     references: [landmarks.id],
   }),
+  // 自引用关系：前置任务 与 后续任务
+  predecessor: one(tasks, {
+    fields: [tasks.predecessorId],
+    references: [tasks.id],
+    relationName: 'predecessor',
+  }),
+  successors: many(tasks, { relationName: 'predecessor' }),
   comments: many(comments),
 }))
 

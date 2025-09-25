@@ -4,6 +4,7 @@ import { TaskSchema, NewTaskSchema } from '@/lib/api/schemas'
 import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
 import { getLocalPath } from '@/lib/local/registry'
+import { ensureProjectRoot, ensureTaskDir } from '@/lib/local/project-fs'
 import { query, type Options } from '@anthropic-ai/claude-code'
 import path from 'path'
 import { google } from '@ai-sdk/google'
@@ -65,17 +66,34 @@ export const tasksRouter = createTRPCRouter({
         description: input.description,
         status: input.status || 'pending',
         landmarkId: (input as any).landmarkId ?? null,
+        predecessorId: (input as any).predecessorId ?? null,
       }).returning()
-      return inserted[0] as any
+      const row = inserted[0]
+      try {
+        const cwd = await getLocalPath(row.projectId)
+        if (cwd) {
+          await ensureProjectRoot(cwd)
+          if (row.landmarkId) await ensureTaskDir(cwd, row.landmarkId, row.id)
+        }
+      } catch (err) {
+        console.warn('ensureTaskDir failed:', (err as any)?.message || err)
+      }
+      return row as any
     }),
 
   update: publicProcedure
-    .input(z.object({ id: z.string().uuid(), description: z.string().optional(), status: z.string().optional() }))
+    .input(z.object({
+      id: z.string().uuid(),
+      description: z.string().optional(),
+      status: z.string().optional(),
+      predecessorId: z.string().uuid().nullable().optional(),
+    }))
     .output(TaskSchema)
     .mutation(async ({ input }) => {
       const updates: any = {}
       if (typeof input.description === 'string') updates.description = input.description
       if (typeof input.status === 'string') updates.status = input.status
+      if ('predecessorId' in input) updates.predecessorId = input.predecessorId ?? null
       updates.updatedAt = new Date()
       const updated = await db.update(tasks).set(updates).where(eq(tasks.id, input.id)).returning()
       if (!updated || updated.length === 0) throw new Error('Task not found')

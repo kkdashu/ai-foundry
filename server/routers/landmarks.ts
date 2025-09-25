@@ -3,6 +3,8 @@ import { db, landmarks } from '@/lib/db'
 import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
 import { LandmarkSchema, NewLandmarkSchema } from '@/lib/api/schemas'
+import { getLocalPath } from '@/lib/local/registry'
+import { ensureLandmarkDir } from '@/lib/local/project-fs'
 
 export const landmarksRouter = createTRPCRouter({
   listByProject: publicProcedure
@@ -22,7 +24,14 @@ export const landmarksRouter = createTRPCRouter({
         name: input.name,
         completedAt: (input as any).completedAt ?? null,
       }).returning()
-      return inserted[0] as any
+      const row = inserted[0]
+      try {
+        const cwd = await getLocalPath(row.projectId)
+        if (cwd) await ensureLandmarkDir(cwd, row.id)
+      } catch (err) {
+        console.warn('ensureLandmarkDir failed:', (err as any)?.message || err)
+      }
+      return row as any
     }),
 
   update: publicProcedure
@@ -48,4 +57,3 @@ export const landmarksRouter = createTRPCRouter({
       return { ok: true }
     }),
 })
-
