@@ -50,7 +50,9 @@ function DirectoryNode({ projectId, rel, name, level, onSelect, onTreeChanged, s
   async function uploadFiles(files: FileList | File[], parentRel: string) {
     if (!files || (files as any).length === 0) return
     const fd = new FormData()
-    Array.from(files as any).forEach((f: File) => fd.append('files', f))
+    for (const file of files) {
+      fd.append('files', file);
+    }
     const qs = new URLSearchParams({ projectId, parentRel }).toString()
     const res = await fetch(`/api/fs/upload?${qs}`, { method: 'POST', body: fd })
     if (!res.ok) throw new Error((await res.json()).error || 'Upload failed')

@@ -37,7 +37,7 @@ export const createProjectTool = createTool({
   },
 })
 
-export type CreateProjectInput = typeof createProjectTool.inputSchema._type
+export type CreateProjectInput = z.infer<typeof createProjectTool.inputSchema>;
 
 export const deleteProjectTool = createTool({
   description:
@@ -97,7 +97,7 @@ export const deleteProjectTool = createTool({
   },
 })
 
-export type DeleteProjectInput = typeof deleteProjectTool.inputSchema._type
+export type DeleteProjectInput = z.infer<typeof deleteProjectTool.inputSchema>;
 
 export const listProjectsTool = createTool({
   description: 'List projects, optionally filtered by name (case-insensitive contains) and limited count.',
@@ -134,4 +134,4 @@ export const listProjectsTool = createTool({
   },
 })
 
-export type ListProjectsInput = typeof listProjectsTool.inputSchema._type
+export type ListProjectsInput = z.infer<typeof listProjectsTool.inputSchema>
