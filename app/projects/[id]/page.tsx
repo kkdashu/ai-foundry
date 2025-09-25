@@ -99,6 +99,7 @@ export default function ProjectDetailPage() {
   const removePathMutation = api.local.removePath.useMutation({ onSuccess: () => localPathQuery.refetch() })
   const [showExplorer, setShowExplorer] = useState(false)
   const [lmExplorerId, setLmExplorerId] = useState<string | null>(null)
+  const [taskExplorerRel, setTaskExplorerRel] = useState<string | null>(null)
   const ensureDirMutation = api.fs.ensureDir.useMutation()
 
   const saveLocalPath = async () => {
@@ -223,6 +224,13 @@ export default function ProjectDetailPage() {
   const selectedTask = tasks.find(t => t.id === expandedTaskId) || null
   const [modalDesc, setModalDesc] = useState<string>('')
   const [modalStatus, setModalStatus] = useState<string>('pending')
+  const idToTask = React.useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks])
+  const canStartSelected = React.useMemo(() => {
+    if (!selectedTask) return false
+    if (!selectedTask.predecessorId) return true
+    const parent = idToTask.get(selectedTask.predecessorId)
+    return parent?.status === 'completed'
+  }, [selectedTask?.id, idToTask])
   useEffect(() => {
     if (selectedTask) {
       setModalDesc(selectedTask.description)
@@ -349,6 +357,9 @@ export default function ProjectDetailPage() {
         )}
         {lmExplorerId && (
           <DynamicFileExplorer projectId={project.id} baseRel={`.project/${lmExplorerId}`} onClose={() => setLmExplorerId(null)} />
+        )}
+        {taskExplorerRel && (
+          <DynamicFileExplorer projectId={project.id} baseRel={taskExplorerRel} onClose={() => setTaskExplorerRel(null)} />
         )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -590,6 +601,28 @@ export default function ProjectDetailPage() {
                       if (id && !comments[id]) fetchComments(id)
                     }}
                     layoutKey={`${projectId}:${lm.id}`}
+                    onStartTask={async (taskId) => {
+                      const found = tasks.find(t => t.id === taskId)
+                      if (found) {
+                        // check dependency
+                        const parent = found.predecessorId ? tasks.find(t => t.id === found.predecessorId) : null
+                        if (parent && parent.status !== 'completed') { alert('前置任务未完成，无法执行'); return }
+                        await handleProcessTask(found)
+                      }
+                      else {
+                        try { await processTaskMutation.mutateAsync({ id: taskId }) } catch {}
+                      }
+                    }}
+                    onOpenTaskDir={async (taskId, landmarkId) => {
+                      if (!landmarkId) { alert('该任务未分组，暂无目录'); return }
+                      const rel = `.project/${landmarkId}/${taskId}`
+                      try {
+                        await ensureDirMutation.mutateAsync({ projectId, rel })
+                        setTaskExplorerRel(rel)
+                      } catch (err: any) {
+                        alert(`无法创建/打开目录：${err?.message || '未知错误'}`)
+                      }
+                    }}
                     onConnectEdge={async (sourceId, targetId) => {
                       // 将 target 的前置任务设置为 source
                       try {
@@ -639,7 +672,7 @@ export default function ProjectDetailPage() {
                       </select>
                     </div>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      <button type="button" onClick={() => handleProcessTask(selectedTask)} style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>AI处理</button>
+                      <button type="button" disabled={!canStartSelected} onClick={() => handleProcessTask(selectedTask)} style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: canStartSelected ? 'pointer' : 'not-allowed', opacity: canStartSelected ? 1 : 0.6 }} title={canStartSelected ? '开始执行任务' : '前置任务未完成，无法执行'}>AI处理</button>
                       <button type="button" onClick={() => { handleDeleteTask(selectedTask.id); setExpandedTaskId(null) }} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>删除</button>
                       <button type="button" onClick={() => setExpandedTaskId(null)} style={{ background: '#f3f4f6', color: '#374151', border: '1px solid #ddd', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>取消</button>
                       <button type="submit" style={{ background: '#111827', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>保存</button>

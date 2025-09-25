@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useMemo, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Play, FolderOpen } from 'lucide-react'
 import type { Task } from '@/lib/types/api'
 import {
   ReactFlow,
@@ -82,7 +82,7 @@ function DeletableEdge({ id, source, target, sourceX, sourceY, targetX, targetY,
   )
 }
 
-function TaskNode({ data }: NodeProps<{ label: string; status?: string }>) {
+function TaskNode({ id, data }: NodeProps<{ label: string; status?: string; onStartTask?: (id: string) => void; canStart?: boolean; onOpenTaskDir?: (id: string, landmarkId?: string | null) => void; landmarkId?: string | null }>) {
   return (
     <div style={{
       border: `2px solid ${statusColor((data as any)?.status)}`,
@@ -93,6 +93,27 @@ function TaskNode({ data }: NodeProps<{ label: string; status?: string }>) {
       fontSize: 12,
       boxShadow: '0 1px 2px rgba(0,0,0,.06)'
     }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <div title={id} style={{ color: '#9ca3af', fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{id}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); (data as any)?.onOpenTaskDir?.(id, (data as any)?.landmarkId) }}
+            title={(data as any)?.landmarkId ? '查看任务目录' : '未分组任务无目录'}
+            disabled={!(data as any)?.landmarkId}
+            style={{ background: 'transparent', border: 'none', padding: 2, borderRadius: 4, cursor: (data as any)?.landmarkId ? 'pointer' : 'not-allowed', color: (data as any)?.landmarkId ? '#111827' : '#9ca3af' }}
+          >
+            <FolderOpen size={14} />
+          </button>
+          <button
+          onClick={(e) => { e.stopPropagation(); if ((data as any)?.canStart !== false) (data as any)?.onStartTask?.(id) }}
+          title={(data as any)?.canStart === false ? '前置任务未完成，无法执行' : '开始执行任务'}
+          disabled={(data as any)?.canStart === false}
+          style={{ background: 'transparent', border: 'none', padding: 2, borderRadius: 4, cursor: (data as any)?.canStart === false ? 'not-allowed' : 'pointer', color: (data as any)?.canStart === false ? '#9ca3af' : '#16a34a', opacity: (data as any)?.canStart === false ? 0.6 : 1 }}
+        >
+          <Play size={14} />
+        </button>
+        </div>
+      </div>
       <Handle type="target" position={Position.Left} style={{ width: 8, height: 8 }} />
       <div style={{ whiteSpace: 'pre-wrap' }}>{(data as any)?.label}</div>
       <Handle type="source" position={Position.Right} style={{ width: 8, height: 8 }} />
@@ -106,6 +127,8 @@ export default function TaskFlow({
   height = '50vh',
   onConnectEdge,
   onDeleteEdge,
+  onStartTask,
+  onOpenTaskDir,
   layoutKey,
 }: {
   tasks: Task[]
@@ -113,6 +136,8 @@ export default function TaskFlow({
   height?: number | string
   onConnectEdge?: (sourceId: string, targetId: string) => Promise<void> | void
   onDeleteEdge?: (sourceId: string, targetId: string) => Promise<void> | void
+  onStartTask?: (taskId: string) => Promise<void> | void
+  onOpenTaskDir?: (taskId: string, landmarkId?: string | null) => Promise<void> | void
   layoutKey?: string
 }) {
   // Build layout (columns by predecessor depth)
@@ -154,11 +179,12 @@ export default function TaskFlow({
     const nodes: Node[] = []
     for (const [depth, arr] of [...buckets.entries()].sort((a, b) => a[0] - b[0])) {
       arr.forEach((t, idx) => {
+        const canStart = !t.predecessorId || (idToTask.get(t.predecessorId)?.status === 'completed')
         nodes.push({
           id: t.id,
           position: { x: depth * XGAP, y: idx * YGAP },
           type: 'task',
-          data: { label: ellipsize(t.description), status: t.status },
+          data: { label: ellipsize(t.description), status: t.status, onStartTask, canStart, onOpenTaskDir, landmarkId: (t as any).landmarkId ?? null },
         })
       })
     }
@@ -202,12 +228,14 @@ export default function TaskFlow({
     setNodes((prev) => {
       const byId = new Map(prev.map(n => [n.id, n]))
       const saved = loadLayout()
+      const idToTask = new Map(tasks.map(t => [t.id, t]))
       const next: Node[] = []
       let i = 0
       for (const t of tasks) {
         const prevNode = byId.get(t.id)
         const pos = saved.get(t.id) ?? prevNode?.position ?? { x: 0, y: i * 100 }
-        next.push({ id: t.id, position: pos, type: 'task', data: { label: ellipsize(t.description), status: t.status } })
+        const canStart = !t.predecessorId || (idToTask.get(t.predecessorId)?.status === 'completed')
+        next.push({ id: t.id, position: pos, type: 'task', data: { label: ellipsize(t.description), status: t.status, onStartTask, canStart, onOpenTaskDir, landmarkId: (t as any).landmarkId ?? null } })
         i++
       }
       // Persist positions after rebuilding list
