@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
+    "@types/bun": "^1.2.22",
     "@types/node": "^24.5.2",
     "@types/pg": "^8.15.5",
     "autoprefixer": "^10.4.21",

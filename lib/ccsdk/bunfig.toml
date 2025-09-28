@@ -1,0 +1,4 @@
+[test]
+root = "./__tests__"
+coverage = true
+coverageReporter = ["text", "lcov"]
