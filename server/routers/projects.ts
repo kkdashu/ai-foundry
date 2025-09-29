@@ -1,8 +1,10 @@
 import { createTRPCRouter, publicProcedure } from '@/server/trpc'
-import { db, projects } from '@/lib/db'
+import { db, projects, landmarks } from '@/lib/db'
 import { ProjectSchema, NewProjectSchema } from '@/lib/api/schemas'
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
+import { autoBindNewProject, getLocalPath } from '@/lib/local/registry'
+import { ensureLandmarkDir } from '@/lib/local/project-fs'
 
 export const projectsRouter = createTRPCRouter({
   list: publicProcedure
@@ -21,7 +23,25 @@ export const projectsRouter = createTRPCRouter({
         .insert(projects)
         .values({ name: input.name, description: input.description, repositoryUrl: input.repositoryUrl || null })
         .returning()
-      return inserted[0] as any
+      const created = inserted[0] as any
+      // Best-effort: auto-bind a local directory for newly created project
+      try { await autoBindNewProject(created.id, created.name) } catch {}
+
+      // Best-effort: create a default landmark "v1.0"
+      try {
+        const lmInserted = await db
+          .insert(landmarks)
+          .values({ projectId: created.id, name: 'v1.0' })
+          .returning()
+        const lm = lmInserted?.[0]
+        if (lm) {
+          try {
+            const cwd = await getLocalPath(created.id)
+            if (cwd) await ensureLandmarkDir(cwd, lm.id)
+          } catch {}
+        }
+      } catch {}
+      return created
     }),
 
   getById: publicProcedure

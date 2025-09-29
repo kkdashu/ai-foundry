@@ -12,7 +12,8 @@ export const ProjectSchema = z.object({
 export const NewProjectSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
-  repositoryUrl: z.string().url().optional().nullable(),
+  // Allow empty string, undefined, or null; otherwise must be a valid URL
+  repositoryUrl: z.union([z.string().url(), z.literal('')]).optional().nullable(),
 })
 
 export const TaskSchema = z.object({

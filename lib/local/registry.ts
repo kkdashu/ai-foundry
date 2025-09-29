@@ -12,10 +12,14 @@ export interface LocalProjectRecord {
 interface RegistryFile {
   version: 1
   projects: Record<string, LocalProjectRecord>
+  settings?: {
+    project_root?: string
+  }
 }
 
 const APP_DIR_NAME = 'ai-foundry'
 const FILE_NAME = 'local-projects.json'
+const ALT_FILE_NAME = 'local-project.json'
 
 function getConfigDir() {
   const platform = process.platform
@@ -67,6 +71,19 @@ export async function loadRegistry(): Promise<RegistryFile> {
   const file = getRegistryPath()
   let existing = await readJsonSafe(file)
   if (existing) return existing
+
+  // Try alternative filename if present
+  const alt = path.join(getConfigDir(), ALT_FILE_NAME)
+  const altData = await readJsonSafe(alt)
+  if (altData) {
+    try {
+      await ensureDirExists(path.dirname(file))
+      await fs.copyFile(alt, file)
+      return altData
+    } catch {
+      // ignore and fallthrough to other migrations
+    }
+  }
 
   // Attempt one-time migration from legacy macOS path if present
   if (process.platform === 'darwin') {
@@ -164,4 +181,63 @@ export async function removeLocalPath(projectId: string) {
 export async function listAllLocal(): Promise<LocalProjectRecord[]> {
   const reg = await loadRegistry()
   return Object.values(reg.projects)
+}
+
+// ----- Project root settings and auto-binding helpers -----
+
+function getDefaultProjectRoot() {
+  return path.join(os.homedir(), 'ai-foundry', 'projects')
+}
+
+export async function getProjectRoot(): Promise<string> {
+  const reg = await loadRegistry()
+  const configured = reg.settings?.project_root?.trim()
+  const root = configured && configured.length > 0 ? configured : getDefaultProjectRoot()
+  const checked = await validateDirectoryExists(root)
+  const abs = checked.ok && checked.path ? checked.path : normalizePath(root)
+  // Persist default back if not set
+  if (!reg.settings) reg.settings = {}
+  if (!reg.settings.project_root || reg.settings.project_root.trim().length === 0) {
+    reg.settings.project_root = abs
+    await saveRegistry(reg)
+  }
+  return abs
+}
+
+export async function setProjectRoot(dir: string) {
+  const reg = await loadRegistry()
+  const checked = await validateDirectoryExists(dir)
+  if (!checked.ok || !checked.path) throw new Error(`Invalid project_root: ${checked.reason || 'unknown'}`)
+  if (!reg.settings) reg.settings = {}
+  reg.settings.project_root = checked.path
+  await saveRegistry(reg)
+  return checked.path
+}
+
+function sanitizeFolderName(name: string) {
+  const s = (name || '').trim()
+  // Replace invalid characters for cross-platform: / \ : * ? " < > |
+  const replaced = s.replace(/[\/:*?"<>|]/g, '-').replace(/\s+/g, ' ')
+  // Trim trailing dots/spaces (Windows quirks)
+  return replaced.replace(/[\s.]+$/g, '') || 'project'
+}
+
+export async function autoBindNewProject(projectId: string, projectName: string) {
+  try {
+    const root = await getProjectRoot()
+    const safeName = sanitizeFolderName(projectName)
+    let target = path.join(root, safeName)
+    // Ensure uniqueness if already used by another project
+    const reg = await loadRegistry()
+    const taken = Object.values(reg.projects).some((p) => p.path === normalizePath(target) && p.projectId !== projectId)
+    if (taken) {
+      target = path.join(root, `${safeName}-${projectId.slice(0, 8)}`)
+    }
+    await ensureDirExists(target)
+    await setLocalPath(projectId, target)
+    return target
+  } catch (err) {
+    // Do not block project creation on local binding failures
+    return null
+  }
 }

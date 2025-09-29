@@ -16,6 +16,7 @@ export const createProjectTool = createTool({
     repositoryUrl: z
       .string()
       .url()
+      .or(z.literal(''))
       .optional()
       .describe('Optional repository URL.'),
   }),

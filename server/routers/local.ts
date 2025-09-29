@@ -1,9 +1,16 @@
 import { createTRPCRouter, publicProcedure } from '@/server/trpc'
 import { z } from 'zod'
-import { getLocalPath, setLocalPath, removeLocalPath, validateDirectoryExists, getRegistryPath } from '@/lib/local/registry'
+import { getLocalPath, setLocalPath, removeLocalPath, validateDirectoryExists, getRegistryPath, getProjectRoot } from '@/lib/local/registry'
 import { TRPCError } from '@trpc/server'
 
 export const localRouter = createTRPCRouter({
+  projectRoot: publicProcedure
+    .input(z.void())
+    .output(z.object({ projectRoot: z.string() }))
+    .query(async () => {
+      const root = await getProjectRoot()
+      return { projectRoot: root }
+    }),
   getPath: publicProcedure
     .input(z.object({ projectId: z.string().uuid() }))
     .output(z.object({ projectId: z.string().uuid(), path: z.string().nullable(), registry: z.string() }))
@@ -32,4 +39,3 @@ export const localRouter = createTRPCRouter({
       return { ok: true }
     }),
 })
-

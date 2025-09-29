@@ -33,6 +33,8 @@ export default function ProjectDetailPage() {
     status: 'pending'
   })
   const [createForLandmarkId, setCreateForLandmarkId] = useState<string | null>(null)
+  const [editingLmId, setEditingLmId] = useState<string | null>(null)
+  const [editingLmName, setEditingLmName] = useState<string>('')
 
   // Local path binding state
   const [localPath, setLocalPath] = useState<string>('')
@@ -66,6 +68,7 @@ export default function ProjectDetailPage() {
 
   // Local path via tRPC
   const localPathQuery = api.local.getPath.useQuery({ projectId }, { enabled: !!projectId })
+  const projectRootQuery = api.local.projectRoot.useQuery(undefined, { enabled: !!projectId })
   useEffect(() => {
     if (localPathQuery.data) {
       setLocalPath(localPathQuery.data.path || '')
@@ -113,6 +116,37 @@ export default function ProjectDetailPage() {
       setLocalPath(res.path)
       setPathError(null)
       alert('已绑定到本地目录')
+    } catch (err: any) {
+      setPathError(err?.message || '路径无效或不可访问')
+      alert(`绑定失败：${err?.message || '未知错误'}`)
+    } finally {
+      setPathLoading(false)
+    }
+  }
+
+  const sanitizeFolderName = (name: string) => {
+    const s = (name || '').trim()
+    const replaced = s.replace(/[\\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ')
+    return replaced.replace(/[\s.]+$/g, '') || 'project'
+  }
+
+  const joinRootAndName = (root: string, name: string) => {
+    const sep = root.includes('\\') ? '\\' : '/'
+    const r = root.replace(/[\\/]+$/g, '')
+    return `${r}${sep}${name}`
+  }
+
+  const bindDefaultPath = async () => {
+    try {
+      setPathLoading(true)
+      const root = projectRootQuery.data?.projectRoot || (await projectRootQuery.refetch()).data?.projectRoot
+      if (!root) throw new Error('无法获取默认根目录')
+      const safeName = sanitizeFolderName(project?.name || '')
+      const defPath = joinRootAndName(root, safeName)
+      const res = await setPathMutation.mutateAsync({ projectId, path: defPath })
+      setLocalPath(res.path)
+      setPathError(null)
+      alert('已绑定到默认路径')
     } catch (err: any) {
       setPathError(err?.message || '路径无效或不可访问')
       alert(`绑定失败：${err?.message || '未知错误'}`)
@@ -240,6 +274,7 @@ export default function ProjectDetailPage() {
 
   // Landmarks mutations
   const createLandmarkMutation = api.landmarks.create.useMutation({ onSuccess: () => landmarksQuery.refetch() })
+  const updateLandmarkMutation = api.landmarks.update.useMutation({ onSuccess: () => landmarksQuery.refetch() })
   const handleCreateLandmark = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newLandmarkName.trim()) return
@@ -317,6 +352,15 @@ export default function ProjectDetailPage() {
                 placeholder="例如：/Users/you/code/my-project 或 C:\\code\\my-project"
                 style={{ flex: 1, padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
               />
+              {!localPath && (
+                <button
+                  onClick={bindDefaultPath}
+                  disabled={pathLoading || projectRootQuery.isLoading}
+                  style={{ backgroundColor: '#22c55e', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  使用默认路径
+                </button>
+              )}
               <button
                 onClick={saveLocalPath}
                 disabled={pathLoading}
@@ -438,7 +482,6 @@ export default function ProjectDetailPage() {
                     boxSizing: 'border-box'
                   }}
                 >
-                  <option value="">未分组</option>
                   {landmarks.map(l => (
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
@@ -559,37 +602,78 @@ export default function ProjectDetailPage() {
       ) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginTop: 16 }}>
-            {[...landmarks, { id: '__unassigned__', name: '未分组' } as any].map((lm: any) => {
-              const lmTasks = lm.id === '__unassigned__' ? tasks.filter(t => !t.landmarkId) : tasks.filter(t => t.landmarkId === lm.id)
+            {landmarks.map((lm: any) => {
+              const lmTasks = tasks.filter(t => t.landmarkId === lm.id)
               return (
                 <div key={lm.id}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{lm.name}</h2>
+                      {editingLmId === lm.id ? (
+                        <input
+                          value={editingLmName}
+                          autoFocus
+                          onChange={(e) => setEditingLmName(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              const name = editingLmName.trim()
+                              if (!name || name === lm.name) { setEditingLmId(null); return }
+                              try {
+                                await updateLandmarkMutation.mutateAsync({ id: lm.id, name })
+                              } catch (err: any) {
+                                alert(`重命名失败：${err?.message || '未知错误'}`)
+                              } finally {
+                                setEditingLmId(null)
+                              }
+                            } else if (e.key === 'Escape') {
+                              setEditingLmId(null)
+                              setEditingLmName('')
+                            }
+                          }}
+                          onBlur={async () => {
+                            const name = editingLmName.trim()
+                            if (!name || name === lm.name) { setEditingLmId(null); return }
+                            try {
+                              await updateLandmarkMutation.mutateAsync({ id: lm.id, name })
+                            } catch (err: any) {
+                              alert(`重命名失败：${err?.message || '未知错误'}`)
+                            } finally {
+                              setEditingLmId(null)
+                            }
+                          }}
+                          style={{ fontSize: '1.05rem', padding: '2px 6px', border: '1px solid #ddd', borderRadius: 6 }}
+                        />
+                      ) : (
+                        <h2
+                          style={{ margin: 0, fontSize: '1.1rem', cursor: 'pointer' }}
+                          title="点击修改名称"
+                          onClick={() => { setEditingLmId(lm.id); setEditingLmName(lm.name) }}
+                        >
+                          {lm.name}
+                        </h2>
+                      )}
                       <button
-                        onClick={() => { const lid = lm.id === '__unassigned__' ? undefined : lm.id; setCreateForLandmarkId(lid ?? null); setNewTask(prev => ({ ...prev, landmarkId: lid } as any)); setShowCreateForm(true) }}
+                        onClick={() => { const lid = lm.id; setCreateForLandmarkId(lid ?? null); setNewTask(prev => ({ ...prev, landmarkId: lid } as any)); setShowCreateForm(true) }}
                         style={{ background: '#22c55e', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}
                         title="在该里程碑下新建任务"
                       >
                         + 任务
                       </button>
-                      {lm.id !== '__unassigned__' && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              await ensureDirMutation.mutateAsync({ projectId, rel: `.project/${lm.id}` })
-                              setLmExplorerId(lm.id)
-                            } catch (err: any) {
-                              alert(`无法创建/打开目录：${err?.message || '未知错误'}`)
-                            }
-                          }}
-                          style={{ background: '#111827', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-                          title="查看该里程碑的本地目录"
-                        >
-                          <FolderOpen size={14} />
-                          目录
-                        </button>
-                      )}
+                      <button
+                        onClick={async () => {
+                          try {
+                            await ensureDirMutation.mutateAsync({ projectId, rel: `.project/${lm.id}` })
+                            setLmExplorerId(lm.id)
+                          } catch (err: any) {
+                            alert(`无法创建/打开目录：${err?.message || '未知错误'}`)
+                          }
+                        }}
+                        style={{ background: '#111827', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                        title="查看该里程碑的本地目录"
+                      >
+                        <FolderOpen size={14} />
+                        目录
+                      </button>
                     </div>
                     <span style={{ color: '#6b7280', fontSize: 12 }}>共 {lmTasks.length} 个任务</span>
                   </div>
