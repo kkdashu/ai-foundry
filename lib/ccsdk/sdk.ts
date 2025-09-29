@@ -3,8 +3,36 @@ import { AsyncQueue } from './async-queue';
 
 type MessageHandler = (msg: SDKMessage) => void | Promise<void>;
 
+// 静态方法，用于直接执行任务
+export async function* runTask(prompt: string, options: Options): AsyncIterable<SDKMessage> {
+  const queue = new AsyncQueue<SDKUserMessage>();
+
+  // 创建初始消息
+  queue.enqueue({
+    type: "user",
+    message: {
+      "role": "user",
+      "content": prompt
+    },
+    parent_tool_use_id: null,
+    session_id: ''
+  });
+
+  // 执行查询
+  const q = query({
+    prompt: queue,
+    options: options
+  });
+
+  // 返回消息流
+  for await (const msg of q) {
+    yield msg;
+  }
+}
+
 export class ClaudeCodeSdk {
   private messageHandlers: Set<MessageHandler> = new Set();
+  private allMessages: SDKMessage[] = [];
 
   constructor(defaultOptions: Partial<Options>) {
     const ops: Options = {
@@ -39,6 +67,8 @@ export class ClaudeCodeSdk {
       if (msg.type == 'system' && msg.subtype == 'init') {
         this.session_id = msg.session_id;
       }
+      // 保存消息
+      this.allMessages.push(msg);
       // 触发所有注册的消息处理器
       for (const handler of this.messageHandlers) {
         try {
@@ -48,6 +78,23 @@ export class ClaudeCodeSdk {
         }
       }
     }
+  }
+
+  // 获取消息流的异步迭代器
+  async *getMessageStream(): AsyncIterable<SDKMessage> {
+    for await (const msg of this.query) {
+      yield msg;
+    }
+  }
+
+  // 获取当前会话ID
+  getSessionId(): string {
+    return this.session_id;
+  }
+
+  // 获取所有消息
+  getAllMessages(): SDKMessage[] {
+    return [...this.allMessages];
   }
 
   // 添加消息监听器
