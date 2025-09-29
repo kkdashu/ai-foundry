@@ -15,7 +15,6 @@ export class AsyncQueue<T> {
     if (this.closed) {
       throw new Error("Cannot enqueue to a closed queue");
     }
-
     const resolver = this.resolvers.shift();
     if (resolver) {
       // There's a waiting consumer, give them the item immediately
@@ -35,11 +34,9 @@ export class AsyncQueue<T> {
     if (this.items.length > 0) {
       return this.items.shift()!;
     }
-
     if (this.closed) {
       return null;
     }
-
     // No items available, wait for one
     return new Promise<T | null>((resolve) => {
       this.resolvers.push(resolve);
