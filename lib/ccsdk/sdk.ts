@@ -1,4 +1,4 @@
-import { query, type Query, type SDKUserMessage, type SDKMessage, Options } from "@anthropic-ai/claude-code"; // 假设的导入
+import { query, type Query, type SDKUserMessage, type SDKMessage, Options } from "@anthropic-ai/claude-code";
 import { AsyncQueue } from './async-queue';
 
 type MessageHandler = (msg: SDKMessage) => void | Promise<void>;
